@@ -66,7 +66,6 @@ main(int argc, char** argv)
 {
     cout << "... start ray tracer" << endl;
 
-
     constexpr unsigned int H = 500;
     constexpr unsigned int W = 500;
     constexpr unsigned int MAX_VAL = 255;
@@ -76,12 +75,12 @@ main(int argc, char** argv)
         << to_string(W) << " " << to_string(H) << "\n"
         << to_string(MAX_VAL) << "\n";
     Sphere s;
-    Color background = Color::red();
+    Color background = Color::black();
 
     Color img[W*H];
 
-    for (unsigned int x = 0; x<W; ++x) {
-        for (unsigned int y = 0; y<H; ++y) {
+    for (unsigned int y = 0; y<H; ++y) {
+        for (unsigned int x = 0; x<W; ++x) {
 
             Ray ray{Vec{}, Vec{x, y, 1}};
 
@@ -95,7 +94,6 @@ main(int argc, char** argv)
 
         }
     }
-
     for (unsigned int i = 0; i<W*H; ++i) {
         Color c = img[i] * MAX_VAL;
         ofs << c.r << " " << c.g << " " << c.b << " ";
