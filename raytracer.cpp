@@ -119,14 +119,17 @@ struct Color {
     }
  };
 
+
 int
 main(int argc, char** argv)
 {
     cout << "... start ray tracer" << endl;
 
     constexpr unsigned int H = 500;
-    constexpr unsigned int W = 500;
+    constexpr unsigned int W = 800;
     constexpr unsigned int MAX_VAL = 255;
+    constexpr double ASPECT_RATIO = (double)W/H;
+    constexpr double FOV = 45;
 
     ofstream ofs{"out.ppm"};    // http://netpbm.sourceforge.net/doc/ppm.html
     ofs << "P3\n"
@@ -134,34 +137,46 @@ main(int argc, char** argv)
         << to_string(MAX_VAL) << "\n";
     Sphere s;
 
-    s.centerPoint = Vec(0, 0, 50);
-    s.radius = 49.999;
+    s.centerPoint = Vec(0, 0, -10);
+    s.radius = 2;
+//    s.radius = 10;
     Color background = Color::black();
     Color scolor = Color::red();
 
-    Color img[W*H];
-    Vec origin{0,0,0};
+    Color* img = new Color[W*H];
+    Vec origin{0,0,0};  // center of projection
 
     for (unsigned int y = 0; y<H; ++y) {
         for (unsigned int x = 0; x<W; ++x) {
 
-            Vec d{x-W/2.0, H/2.0-y, 1};
+            const double px_ndc = (x+0.5)/W;
+            const double py_ndc = (y+0.5)/H;
+            const double cam_x = (2*px_ndc  - 1) * ASPECT_RATIO * tan(FOV/2);
+            const double cam_y = (1 - 2*py_ndc) * tan(FOV/2);
+
+            Vec d{cam_x, cam_y, -1};
             d.normalize();
-            Ray ray{origin, d};
+            const Ray ray{origin, d};
 
             double dist;
             Color px = background;
+
             // check intersection
-            if ( s.intersection(ray, dist) ) {   // intersect -> do shading (but const color for now)
+            if ( s.intersection(ray, dist) ) {
                 px = scolor;
-                cout << "x: " << x << " y: " << y << " ";
+
             }
             img[y*W + x] = px;
         }
     }
+
+
+    // write image to file
     for (unsigned int i = 0; i<W*H; ++i) {
         Color c = img[i] * MAX_VAL;
         ofs << c.r << " " << c.g << " " << c.b << " ";
     }
 
+
+    delete[] img;
 }
