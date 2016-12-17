@@ -24,6 +24,18 @@ struct Vec {
         return temp;
     }
 
+    Vec operator/ (const double v) const {
+        return Vec{x/v, y/v, y/v};
+    }
+
+    Vec operator+ (const Vec& rhs) const {
+        return Vec{x+rhs.x, y+rhs.y, z+rhs.z};
+    }
+
+    Vec operator* (double val) const {
+        return Vec{x*val, y*val, z*val};
+    }
+
     double dotProduct(const Vec& vec2) const
     {
         return (x * vec2.x) +
@@ -53,6 +65,11 @@ struct Ray {
     Vec direction;
 
     Ray(Vec o, Vec d): origin{o}, direction{d} {}
+
+    Vec getPoint(double dist) const
+    {
+        return origin + direction*dist;
+    }
 };
 
 struct Sphere {
@@ -64,7 +81,8 @@ struct Sphere {
 
     // get intersection with ray: refer: https://en.wikipedia.org/wiki/Line%E2%80%93sphere_intersection
     // more details: https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rendering-simple-shapes/ray-sphere-intersection
-    bool intersection(const Ray &ray, double &distance)
+    bool
+    intersect(const Ray &ray, double &distance)
     {
         // (l * (o - c))^2 - || o - c ||^2 + r^2
         double val1, val2, val3, dist1, dist2;
@@ -88,8 +106,23 @@ struct Sphere {
 
         return true;
     }
+
+    Vec
+    getNormal(const Vec& P)
+    {
+        // src: https://cs.colorado.edu/~mcbryan/5229.03/mail/110.htm
+        Vec n{P - centerPoint};
+        n = n / radius;
+        return n;
+    }
 };
 
+template <typename T>
+T clamp(T min, T max, T val) {
+    val = val < min ? min : val;
+    val = val > max ? max : val;
+    return val;
+}
 
 struct Color {
     double r,g,b;
@@ -100,11 +133,29 @@ struct Color {
         return Color{r*d, g*d, b*d};
     }
 
+    Color operator+(const Color& c) {
+        return Color{r+c.r, g+c.g, b+c.b};
+    }
+
     Color& mult(double d) {
         r *= d;
         g *= d;
         b *= d;
 
+        return *this;
+    }
+
+    Color& clamp(double min, double max) {
+        r = ::clamp(min, max, r);
+        g = ::clamp(min, max, g);
+        b = ::clamp(min, max, b);
+        return *this;
+    }
+
+    Color& round() {
+        r = ::round(r);
+        g = ::round(g);
+        b = ::round(b);
         return *this;
     }
 
@@ -119,6 +170,12 @@ struct Color {
     }
  };
 
+ostream&
+operator<<(ostream& os, const Color& c) {
+    os << c.r << " " << c.g << " " << c.b << " ";
+    return os;
+}
+
 
 int
 main(int argc, char** argv)
@@ -131,7 +188,7 @@ main(int argc, char** argv)
     constexpr double ASPECT_RATIO = (double)W/H;
     constexpr double FOV = 45;
 
-    ofstream ofs{"out.ppm"};    // http://netpbm.sourceforge.net/doc/ppm.html
+    ofstream ofs{"out2.ppm"};    // http://netpbm.sourceforge.net/doc/ppm.html
     ofs << "P3\n"
         << to_string(W) << " " << to_string(H) << "\n"
         << to_string(MAX_VAL) << "\n";
@@ -140,11 +197,13 @@ main(int argc, char** argv)
     s.centerPoint = Vec(0, 0, -10);
     s.radius = 2;
 //    s.radius = 10;
-    Color background = Color::black();
+    Color background{0,0.5,0.5};
     Color scolor = Color::red();
 
     Color* img = new Color[W*H];
-    Vec origin{0,0,0};  // center of projection
+    Color* img_ptr = img;
+    const Vec origin{0,0,0};  // center of projection
+    const Vec light{0,0,-1};
 
     for (unsigned int y = 0; y<H; ++y) {
         for (unsigned int x = 0; x<W; ++x) {
@@ -162,19 +221,26 @@ main(int argc, char** argv)
             Color px = background;
 
             // check intersection
-            if ( s.intersection(ray, dist) ) {
-                px = scolor;
-
+            if ( s.intersect(ray, dist) ) {
+                Vec p = ray.getPoint(dist);
+                const Vec n = s.getNormal(p);
+                Vec lv = light-p;
+                lv.normalize();
+                const double diff_factor = n.dotProduct(lv);
+                px = scolor * diff_factor;
+                px.clamp(0,1);
             }
-            img[y*W + x] = px;
+            *(img_ptr++) = px;
         }
     }
 
 
     // write image to file
+    img_ptr = img;
     for (unsigned int i = 0; i<W*H; ++i) {
-        Color c = img[i] * MAX_VAL;
-        ofs << c.r << " " << c.g << " " << c.b << " ";
+        Color c = *(img_ptr++) * MAX_VAL;
+        c.round();
+        ofs << c;
     }
 
 
