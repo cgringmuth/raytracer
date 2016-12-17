@@ -41,11 +41,8 @@ struct Ray {
 
 struct Sphere {
     // define location + radius
-    Vec centerPointSphere;
-    double radiusSphere;
-
-    //Ray to test
-    Ray RayIntersect;
+    Vec centerPoint;
+    double radius;
 
     // get normal (low prior)
 
