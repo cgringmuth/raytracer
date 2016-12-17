@@ -1,6 +1,7 @@
 #include <iostream>
 #include <math.h>
 #include <fstream>
+#include <vector>
 
 
 // url: https://www.scratchapixel.com/lessons/3d-basic-rendering/introduction-to-ray-tracing
@@ -25,7 +26,7 @@ struct Vec {
     }
 
     Vec operator/ (const double v) const {
-        return Vec{x/v, y/v, y/v};
+        return Vec{x/v, y/v, z/v};
     }
 
     Vec operator+ (const Vec& rhs) const {
@@ -43,14 +44,14 @@ struct Vec {
                (z * vec2.z);
     }
 
-    double lenght() const
+    double length() const
     {
         return sqrt(dotProduct(*this));
     }
 
     Vec& normalize()
     {
-        double l = lenght();
+        double l = length();
         x /= l;
         y /= l;
         z /= l;
@@ -77,19 +78,20 @@ struct Sphere {
     Vec centerPoint;
     double radius;
 
-    // get normal (low prior)
+    Sphere(Vec c, double r): centerPoint{c}, radius{r} {}
 
     // get intersection with ray: refer: https://en.wikipedia.org/wiki/Line%E2%80%93sphere_intersection
     // more details: https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rendering-simple-shapes/ray-sphere-intersection
     bool
-    intersect(const Ray &ray, double &distance)
+    intersect(const Ray &ray, double &distance) const
     {
         // (l * (o - c))^2 - || o - c ||^2 + r^2
         double val1, val2, val3, dist1, dist2;
         const Vec temp = ray.origin-centerPoint;
         val1 = temp.dotProduct(ray.direction);
-        val2 = temp.lenght();
+        val2 = temp.length();
         val3 = val1*val1 - val2*val2 + radius*radius;
+
         if(val3 < 0) {
             return false;
         }
@@ -108,7 +110,7 @@ struct Sphere {
     }
 
     Vec
-    getNormal(const Vec& P)
+    getNormal(const Vec& P) const
     {
         // src: https://cs.colorado.edu/~mcbryan/5229.03/mail/110.htm
         Vec n{P - centerPoint};
@@ -192,19 +194,29 @@ main(int argc, char** argv)
     ofs << "P3\n"
         << to_string(W) << " " << to_string(H) << "\n"
         << to_string(MAX_VAL) << "\n";
-    Sphere s;
 
-    s.centerPoint = Vec(0, 0, -10);
-    s.radius = 2;
+    vector<Sphere> spheres;
+    spheres.push_back(Sphere{Vec{0,0,-20}, 5});
+    spheres.push_back(Sphere{Vec{4,4,-22}, 2.5});
+    spheres.push_back(Sphere{Vec{-4,4,-5}, 2.5});
+
 //    s.radius = 10;
     Color background{0,0.5,0.5};
     Color scolor = Color::red();
 
     Color* img = new Color[W*H];
+    double* zbuff = new double[W*H];
+    double* zbuff_ptr = zbuff;
     Color* img_ptr = img;
     const Vec origin{0,0,0};  // center of projection
-    const Vec light{0,0,-1};
+    const Vec light{100,0,0};
 
+    // initialize z buffer to inifinity
+    for (unsigned int i = 0; i<W*H; ++i) {
+        *(zbuff_ptr++) = 2000000;
+    }
+
+    zbuff_ptr = zbuff;
     for (unsigned int y = 0; y<H; ++y) {
         for (unsigned int x = 0; x<W; ++x) {
 
@@ -220,16 +232,23 @@ main(int argc, char** argv)
             double dist;
             Color px = background;
 
-            // check intersection
-            if ( s.intersect(ray, dist) ) {
-                Vec p = ray.getPoint(dist);
-                const Vec n = s.getNormal(p);
-                Vec lv = light-p;
-                lv.normalize();
-                const double diff_factor = n.dotProduct(lv);
-                px = scolor * diff_factor;
-                px.clamp(0,1);
+            // check intersections
+            for (const auto& s : spheres) {
+                if ( s.intersect(ray, dist) ) {
+                    if (*zbuff_ptr < dist) {
+                        continue;
+                    }
+                    *zbuff_ptr = dist;
+                    Vec pintersect = ray.getPoint(dist);
+                    const Vec n = s.getNormal(pintersect);
+                    Vec lv = light-pintersect;
+                    lv.normalize();
+                    const double diff_factor = n.dotProduct(lv);
+                    px = scolor * diff_factor;
+                    px.clamp(0,1);
+                }
             }
+            zbuff_ptr++;
             *(img_ptr++) = px;
         }
     }
@@ -245,4 +264,5 @@ main(int argc, char** argv)
 
 
     delete[] img;
+    delete[] zbuff;
 }
