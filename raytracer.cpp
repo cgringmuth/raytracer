@@ -161,7 +161,7 @@ main(int argc, char** argv)
                 px = scolor;
                 cout << "x: " << x << " y: " << y << " ";
             }
-            img[x*W + y] = px;
+            img[y*W + x] = px;
         }
     }
     for (unsigned int i = 0; i<W*H; ++i) {
