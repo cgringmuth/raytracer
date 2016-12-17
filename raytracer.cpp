@@ -75,21 +75,16 @@ struct Sphere {
         if(val3 < 0) {
             return false;
         }
-//
-//        // compute distance
-//        dist1 = -temp.dotProduct(ray.direction) + sqrt(val3);
-//        dist2 = -temp.dotProduct(ray.direction) - sqrt(val3);
-//
-//        if(dist1 < 0 && dist2 > 0){
-//            distance = dist2;
-//        }else if(dist1 > 0 && dist2 < 0){
-//            distance = dist1;
-//        }else if (dist1 > 0 && dist2 > 0){
-//            distance = min(dist1,dist2);
-//        }else {
-//            cout << "Unexpected distance values";
-//            return false;
-//        }
+
+        // compute distance
+        dist1 = -temp.dotProduct(ray.direction) + sqrt(val3);
+        dist2 = -temp.dotProduct(ray.direction) - sqrt(val3);
+
+        if(dist1 < 0 || dist2 < 0) {
+            distance = max(dist1,dist2);
+        } else if (dist1 > 0 && dist2 > 0) {
+            distance = min(dist1,dist2);
+        }
 
         return true;
     }
