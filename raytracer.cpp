@@ -24,9 +24,25 @@ struct Vec {
         return temp;
     }
 
-    double dotProduct(const Vec& vec2)
+    double dotProduct(const Vec& vec2) const
     {
-        return ((x * vec2.x) + (y * vec2.y) + (z * vec2.z));
+        return (x * vec2.x) +
+               (y * vec2.y) +
+               (z * vec2.z);
+    }
+
+    double lenght() const
+    {
+        return sqrt(dotProduct(*this));
+    }
+
+    Vec& normalize()
+    {
+        double l = lenght();
+        x /= l;
+        y /= l;
+        z /= l;
+        return *this;
     }
 };
 
@@ -48,35 +64,34 @@ struct Sphere {
 
     // get intersection with ray: refer: https://en.wikipedia.org/wiki/Line%E2%80%93sphere_intersection
     // more details: https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rendering-simple-shapes/ray-sphere-intersection
-    bool intersection(const Ray &RayIntersect, double &distance)
+    bool intersection(const Ray &ray, double &distance)
     {
         // (l * (o - c))^2 - || o - c ||^2 + r^2
         double val1, val2, val3, dist1, dist2;
-        val1 = (RayIntersect.origin-centerPoint).dotProduct(RayIntersect.direction);
-        val2 = (RayIntersect.origin-centerPoint).dotProduct((RayIntersect.origin-centerPoint));
-        val3 = val1 - val2 + pow(radius, 2.0);
-
+        const Vec temp = ray.origin-centerPoint;
+        val1 = temp.dotProduct(ray.direction);
+        val2 = temp.lenght();
+        val3 = val1*val1 - val2*val2 + radius*radius;
         if(val3 < 0) {
             return false;
         }
+//
+//        // compute distance
+//        dist1 = -temp.dotProduct(ray.direction) + sqrt(val3);
+//        dist2 = -temp.dotProduct(ray.direction) - sqrt(val3);
+//
+//        if(dist1 < 0 && dist2 > 0){
+//            distance = dist2;
+//        }else if(dist1 > 0 && dist2 < 0){
+//            distance = dist1;
+//        }else if (dist1 > 0 && dist2 > 0){
+//            distance = min(dist1,dist2);
+//        }else {
+//            cout << "Unexpected distance values";
+//            return false;
+//        }
 
-        // compute distance
-        dist1 = -(RayIntersect.origin-centerPoint).dotProduct(RayIntersect.direction) + sqrt(val3);
-        dist2 = -(RayIntersect.origin-centerPoint).dotProduct(RayIntersect.direction) - sqrt(val3);
-
-        if(dist1 < 0 && dist2 > 0){
-            distance = dist2;
-            return true;
-        }else if(dist1 > 0 && dist2 < 0){
-            distance = dist1;
-            return true;
-        }else if (dist1 > 0 && dist2 > 0){
-            distance = min(dist1,dist2);
-            return true;
-        }else {
-            cout << "Unexpected distance values";
-            return false;
-        }
+        return true;
     }
 };
 
@@ -123,18 +138,27 @@ main(int argc, char** argv)
         << to_string(W) << " " << to_string(H) << "\n"
         << to_string(MAX_VAL) << "\n";
     Sphere s;
+
+    s.centerPoint = Vec(0, 0, 50);
+    s.radius = 49;
     Color background = Color::black();
+    Color scolor = Color::red();
 
     Color img[W*H];
+    Vec origin{0,0,0};
 
     for (unsigned int y = 0; y<H; ++y) {
         for (unsigned int x = 0; x<W; ++x) {
 
-            Ray ray{Vec{}, Vec{x, y, 1}};
+            Vec d{x-W/2.0, H/2.0-y, 1};
+            d.normalize();
+            Ray ray{origin, d};
 
+            double dist;
             // check intersection
-            if ( false ) {   // intersect -> do shading (but const color for now)
-
+            if ( s.intersection(ray, dist) ) {   // intersect -> do shading (but const color for now)
+                img[x*W + y] = scolor;
+                cout << "x: " << x << " y: " << y << " ";
             }
             else {  // no intersection -> background color
                 img[x*W + y] = background;
