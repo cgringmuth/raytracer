@@ -140,7 +140,7 @@ main(int argc, char** argv)
     Sphere s;
 
     s.centerPoint = Vec(0, 0, 50);
-    s.radius = 49;
+    s.radius = 49.999;
     Color background = Color::black();
     Color scolor = Color::red();
 
@@ -155,15 +155,13 @@ main(int argc, char** argv)
             Ray ray{origin, d};
 
             double dist;
+            Color px = background;
             // check intersection
             if ( s.intersection(ray, dist) ) {   // intersect -> do shading (but const color for now)
-                img[x*W + y] = scolor;
+                px = scolor;
                 cout << "x: " << x << " y: " << y << " ";
             }
-            else {  // no intersection -> background color
-                img[x*W + y] = background;
-            }
-
+            img[x*W + y] = px;
         }
     }
     for (unsigned int i = 0; i<W*H; ++i) {
