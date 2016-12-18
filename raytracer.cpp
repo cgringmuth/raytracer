@@ -2,6 +2,7 @@
 #include <math.h>
 #include <fstream>
 #include <vector>
+#include <memory>
 
 
 // url: https://www.scratchapixel.com/lessons/3d-basic-rendering/introduction-to-ray-tracing
@@ -73,7 +74,14 @@ struct Ray {
     }
 };
 
-struct Sphere {
+
+struct Object {
+    virtual bool intersect(const Ray& ray, double& dist) const = 0;
+    virtual Vec getNormal(const Vec& vec) const = 0;
+
+};
+
+struct Sphere : public Object {
     // define location + radius
     Vec centerPoint;
     double radius;
@@ -82,8 +90,8 @@ struct Sphere {
 
     // get intersection with ray: refer: https://en.wikipedia.org/wiki/Line%E2%80%93sphere_intersection
     // more details: https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rendering-simple-shapes/ray-sphere-intersection
-    bool
-    intersect(const Ray &ray, double &distance) const
+    virtual bool
+    intersect(const Ray& ray, double& dist) const override
     {
         // (l * (o - c))^2 - || o - c ||^2 + r^2
         double val1, val2, val3, dist1, dist2;
@@ -101,16 +109,16 @@ struct Sphere {
         dist2 = -temp.dotProduct(ray.direction) - sqrt(val3);
 
         if(dist1 < 0 || dist2 < 0) {
-            distance = max(dist1,dist2);
+            dist = max(dist1,dist2);
         } else if (dist1 > 0 && dist2 > 0) {
-            distance = min(dist1,dist2);
+            dist = min(dist1,dist2);
         }
 
         return true;
     }
 
-    Vec
-    getNormal(const Vec& P) const
+    virtual Vec
+    getNormal(const Vec& P) const override
     {
         // src: https://cs.colorado.edu/~mcbryan/5229.03/mail/110.htm
         Vec n{P - centerPoint};
@@ -199,10 +207,12 @@ main(int argc, char** argv)
         << to_string(W) << " " << to_string(H) << "\n"
         << to_string(MAX_VAL) << "\n";
 
-    vector<Sphere> spheres;
-    spheres.push_back(Sphere{Vec{0,0,-20}, 5});
-    spheres.push_back(Sphere{Vec{4,4,-22}, 2.5});
-    spheres.push_back(Sphere{Vec{-4,4,-5}, 2.5});
+    vector<shared_ptr<Object>> objects;
+    objects.push_back(make_shared<Sphere>(Vec{0,0,-20}, 5));
+    objects.push_back(make_shared<Sphere>(Vec{2,1,-15}, 1));
+    objects.push_back(make_shared<Sphere>(Vec{4,4,-22}, 2.5));
+    objects.push_back(make_shared<Sphere>(Vec{80,-6,-150}, 5));
+    objects.push_back(make_shared<Sphere>(Vec{-4,4,-5}, 2.5));
 
 //    s.radius = 10;
     Color background{0,0.5,0.5};
@@ -213,7 +223,7 @@ main(int argc, char** argv)
     double* zbuff_ptr = zbuff;
     Color* img_ptr = img;
     const Vec origin{0,0,0};  // center of projection
-    const Vec light{0,0,1};
+    const Vec light{30,20,1};
 
     // initialize z buffer to infinity
     for (unsigned int i = 0; i<W*H; ++i) {
@@ -237,14 +247,14 @@ main(int argc, char** argv)
             Color px = background;
 
             // check intersections
-            for (const auto& s : spheres) {
-                if ( s.intersect(ray, dist) ) {
+            for (const auto& o : objects) {
+                if ( o->intersect(ray, dist) ) {
                     if (*zbuff_ptr < dist) {
                         continue;
                     }
                     *zbuff_ptr = dist;
                     Vec pintersect = ray.getPoint(dist);
-                    const Vec n = s.getNormal(pintersect);
+                    const Vec n = o->getNormal(pintersect);
                     Vec lv = light-pintersect;
                     lv.normalize();
                     const double diff_factor = n.dotProduct(lv);
