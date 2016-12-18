@@ -9,7 +9,9 @@
 
 using namespace std;
 
-
+/** 3D vector in cartesian space.
+ *
+ */
 struct Vec {
     double x, y, z;
     Vec() : x{0}, y{0}, z{0} {}
@@ -60,6 +62,9 @@ struct Vec {
     }
 };
 
+/** Line which will be used for back raytracing
+ *
+ */
 struct Ray {
     // origin
     Vec origin;
@@ -75,12 +80,18 @@ struct Ray {
 };
 
 
+/** Generic base class for all objects which shall be rendered
+ *
+ */
 struct Object {
     virtual bool intersect(const Ray& ray, double& dist) const = 0;
     virtual Vec getNormal(const Vec& vec) const = 0;
 
 };
 
+/** The most common object to be rendered in a raytracer
+ *
+ */
 struct Sphere : public Object {
     // define location + radius
     Vec centerPoint;
@@ -127,6 +138,15 @@ struct Sphere : public Object {
     }
 };
 
+
+/** Clips the value to min and max.
+ * If the input value lies in [min,max], it will not be changed. Otherwise it will be set to min if val < min or to
+ * max if val > max.
+ * @param min Min value
+ * @param max Max value
+ * @param val Input value
+ * @return The clipped value
+ */
 template <typename T>
 T clamp(T min, T max, T val) {
     val = val < min ? min : val;
@@ -134,6 +154,9 @@ T clamp(T min, T max, T val) {
     return val;
 }
 
+/** Container to save pixel color information in rgb format.
+ *
+ */
 struct Color {
     double r,g,b;
     Color(): r{0}, g{0}, b{0} {};
@@ -186,6 +209,11 @@ operator<<(ostream& os, const Color& c) {
     return os;
 }
 
+/** Converts angle in degree into rad.
+ *
+ * @param ang angle in degree
+ * @return angle in rad
+ */
 double deg2rad(double ang) {
     return ang * M_PI / 180;
 }
