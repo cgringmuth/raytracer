@@ -250,6 +250,8 @@ main(int argc, char** argv)
                     const double diff_factor = n.dotProduct(lv);
                     px = scolor * diff_factor;
                     px.clamp(0,1);
+                    px = px + scolor*0.1;
+                    px.clamp(0,1);
                 }
             }
             zbuff_ptr++;
