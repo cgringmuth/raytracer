@@ -178,6 +178,10 @@ operator<<(ostream& os, const Color& c) {
     return os;
 }
 
+double deg2rad(double ang) {
+    return ang * M_PI / 180;
+}
+
 
 int
 main(int argc, char** argv)
@@ -188,7 +192,7 @@ main(int argc, char** argv)
     constexpr unsigned int W = 800;
     constexpr unsigned int MAX_VAL = 255;
     constexpr double ASPECT_RATIO = (double)W/H;
-    constexpr double FOV = 45;
+    constexpr double FOV = 100;
 
     ofstream ofs{"out2.ppm"};    // http://netpbm.sourceforge.net/doc/ppm.html
     ofs << "P3\n"
@@ -209,9 +213,9 @@ main(int argc, char** argv)
     double* zbuff_ptr = zbuff;
     Color* img_ptr = img;
     const Vec origin{0,0,0};  // center of projection
-    const Vec light{100,0,0};
+    const Vec light{0,0,1};
 
-    // initialize z buffer to inifinity
+    // initialize z buffer to infinity
     for (unsigned int i = 0; i<W*H; ++i) {
         *(zbuff_ptr++) = 2000000;
     }
@@ -222,8 +226,8 @@ main(int argc, char** argv)
 
             const double px_ndc = (x+0.5)/W;
             const double py_ndc = (y+0.5)/H;
-            const double cam_x = (2*px_ndc  - 1) * ASPECT_RATIO * tan(FOV/2);
-            const double cam_y = (1 - 2*py_ndc) * tan(FOV/2);
+            const double cam_x = (2*px_ndc  - 1) * ASPECT_RATIO * tan(deg2rad(FOV)/2);
+            const double cam_y = (1 - 2*py_ndc) * tan(deg2rad(FOV)/2);
 
             Vec d{cam_x, cam_y, -1};
             d.normalize();
