@@ -170,6 +170,13 @@ struct Color {
         return Color{r+c.r, g+c.g, b+c.b};
     }
 
+    Color operator+= (const Color& rhs) {
+        r += rhs.r;
+        g += rhs.g;
+        b += rhs.b;
+
+    }
+
     Color& mult(double d) {
         r *= d;
         g *= d;
@@ -202,6 +209,15 @@ struct Color {
         return Color(1,0,0);
     }
  };
+
+
+struct Light {
+    Color color;
+    Vec pos;
+
+    Light(Vec pos_, Color color_): pos{pos_}, color{color_} {}
+    Light(Vec pos_): pos{pos_}, color{Color::white()} {}
+};
 
 ostream&
 operator<<(ostream& os, const Color& c) {
@@ -251,14 +267,19 @@ main(int argc, char** argv)
     double* zbuff_ptr = zbuff;
     Color* img_ptr = img;
     const Vec origin{0,0,0};  // center of projection
-    const Vec light{30,20,1};
+
+    vector<Light> lights;
+    lights.emplace_back(Light{Vec{30,20,1}});
+//    lights.emplace_back(Light{Vec{-30,-20,1}});
 
     // initialize z buffer to infinity
     for (unsigned int i = 0; i<W*H; ++i) {
         *(zbuff_ptr++) = 2000000;
     }
 
+
     zbuff_ptr = zbuff;
+    img_ptr = img;
     for (unsigned int y = 0; y<H; ++y) {
         for (unsigned int x = 0; x<W; ++x) {
 
@@ -272,26 +293,38 @@ main(int argc, char** argv)
             const Ray ray{origin, d};
 
             double dist;
-            Color px = background;
+            Color px;
+            bool intersect{false};
 
             // check intersections
             for (const auto& o : objects) {
-                if ( o->intersect(ray, dist) ) {
-                    if (*zbuff_ptr < dist) {
-                        continue;
+
+                    if ( o->intersect(ray, dist) ) {
+                        if (*zbuff_ptr < dist) {
+                            continue;
+                        }
+
+                        *zbuff_ptr = dist;
+                        Vec pintersect = ray.getPoint(dist);
+                        const Vec n = o->getNormal(pintersect);
+                        for (const auto& l : lights) {
+                            Vec lv = l.pos - pintersect;
+                            lv.normalize();
+                            const double diff_factor = n.dotProduct(lv);
+                            px += scolor * diff_factor;
+                        }
+                        px.clamp(0, 1);
+                        px = px + scolor * 0.1;
+                        px.clamp(0, 1);
+                        intersect = true;
                     }
-                    *zbuff_ptr = dist;
-                    Vec pintersect = ray.getPoint(dist);
-                    const Vec n = o->getNormal(pintersect);
-                    Vec lv = light-pintersect;
-                    lv.normalize();
-                    const double diff_factor = n.dotProduct(lv);
-                    px = scolor * diff_factor;
-                    px.clamp(0,1);
-                    px = px + scolor*0.1;
-                    px.clamp(0,1);
-                }
+
             }
+
+            if (!intersect) {
+                px = background;
+            }
+
             zbuff_ptr++;
             *(img_ptr++) = px;
         }
