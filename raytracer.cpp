@@ -3,6 +3,7 @@
 #include <fstream>
 #include <vector>
 #include <memory>
+#include <limits>
 
 
 // url: https://www.scratchapixel.com/lessons/3d-basic-rendering/introduction-to-ray-tracing
@@ -125,7 +126,7 @@ struct Sphere : public Object {
             dist = min(dist1,dist2);
         }
 
-        return true;
+        return dist > 0;
     }
 
     virtual Vec
@@ -164,6 +165,10 @@ struct Color {
 
     Color operator*(double d) {
         return Color{r*d, g*d, b*d};
+    }
+
+    Color operator*(Color c) {
+        return Color{r*c.r, g*c.g, b*c.b};
     }
 
     Color operator+(const Color& c) {
@@ -253,10 +258,12 @@ main(int argc, char** argv)
 
     vector<shared_ptr<Object>> objects;
     objects.push_back(make_shared<Sphere>(Vec{0,0,-20}, 5));
+//    objects.push_back(make_shared<Sphere>(Vec{10,0,-20}, 5));
     objects.push_back(make_shared<Sphere>(Vec{2,1,-15}, 1));
     objects.push_back(make_shared<Sphere>(Vec{4,4,-22}, 2.5));
     objects.push_back(make_shared<Sphere>(Vec{80,-6,-150}, 5));
     objects.push_back(make_shared<Sphere>(Vec{-4,4,-5}, 2.5));
+    objects.push_back(make_shared<Sphere>(Vec{0,4,-5}, 2.5));
 
 //    s.radius = 10;
     Color background{0,0.5,0.5};
@@ -264,21 +271,13 @@ main(int argc, char** argv)
 
     Color* img = new Color[W*H];
     double* zbuff = new double[W*H];
-    double* zbuff_ptr = zbuff;
     Color* img_ptr = img;
     const Vec origin{0,0,0};  // center of projection
 
     vector<Light> lights;
-    lights.emplace_back(Light{Vec{30,20,1}});
+    lights.emplace_back(Light{Vec{30,0,-2}, Color::white()});
 //    lights.emplace_back(Light{Vec{-30,-20,1}});
 
-    // initialize z buffer to infinity
-    for (unsigned int i = 0; i<W*H; ++i) {
-        *(zbuff_ptr++) = 2000000;
-    }
-
-
-    zbuff_ptr = zbuff;
     img_ptr = img;
     for (unsigned int y = 0; y<H; ++y) {
         for (unsigned int x = 0; x<W; ++x) {
@@ -292,40 +291,61 @@ main(int argc, char** argv)
             d.normalize();
             const Ray ray{origin, d};
 
-            double dist;
+            double dist{std::numeric_limits<double>::max()}, tmpdist;
             Color px;
             bool intersect{false};
+            Object* curo{nullptr};
+
 
             // check intersections
             for (const auto& o : objects) {
+                if ( o->intersect(ray, tmpdist) ) {
+                    if (tmpdist < dist) {
+                        dist = tmpdist;
+                        curo = &(*o);
+                    }
+                }
+            }
 
-                    if ( o->intersect(ray, dist) ) {
-                        if (*zbuff_ptr < dist) {
+            if (curo != nullptr) {
+                Vec pintersect{ray.getPoint(dist)};
+                const Vec n{curo->getNormal(pintersect)};
+
+                for (const auto& l : lights) {
+                    Vec lv{l.pos - pintersect};
+//                    Vec lv{l.pos};
+                    lv.normalize();
+                    bool inShadow{false};
+
+                    // check if object is blocking light
+                    Ray shadow_ray{pintersect, lv};
+                    for (const auto& o : objects) {
+                        if (&(*o) == curo)
                             continue;
+                        if ( o->intersect(shadow_ray, tmpdist) ) {
+                            inShadow = true;
+                            break;
                         }
-
-                        *zbuff_ptr = dist;
-                        Vec pintersect = ray.getPoint(dist);
-                        const Vec n = o->getNormal(pintersect);
-                        for (const auto& l : lights) {
-                            Vec lv = l.pos - pintersect;
-                            lv.normalize();
-                            const double diff_factor = n.dotProduct(lv);
-                            px += scolor * diff_factor;
-                        }
-                        px.clamp(0, 1);
-                        px = px + scolor * 0.1;
-                        px.clamp(0, 1);
-                        intersect = true;
+                    }
+                    if (inShadow) {
+                        continue;
                     }
 
+                    const double diff_factor{n.dotProduct(lv)};
+                    px += scolor * l.color * diff_factor;
+                }
+
+
+                px.clamp(0, 1);
+                px = px + scolor * 0.2;
+                px.clamp(0, 1);
+                intersect = true;
             }
 
             if (!intersect) {
                 px = background;
             }
 
-            zbuff_ptr++;
             *(img_ptr++) = px;
         }
     }
