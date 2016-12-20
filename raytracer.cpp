@@ -251,7 +251,7 @@ main(int argc, char** argv)
     constexpr double ASPECT_RATIO = (double)W/H;
     constexpr double FOV = 100;
 
-    ofstream ofs{"out2.ppm"};    // http://netpbm.sourceforge.net/doc/ppm.html
+    ofstream ofs{"out3.ppm"};    // http://netpbm.sourceforge.net/doc/ppm.html
     ofs << "P3\n"
         << to_string(W) << " " << to_string(H) << "\n"
         << to_string(MAX_VAL) << "\n";
@@ -263,7 +263,6 @@ main(int argc, char** argv)
     objects.push_back(make_shared<Sphere>(Vec{4,4,-22}, 2.5));
     objects.push_back(make_shared<Sphere>(Vec{80,-6,-150}, 5));
     objects.push_back(make_shared<Sphere>(Vec{-4,4,-5}, 2.5));
-    objects.push_back(make_shared<Sphere>(Vec{0,4,-5}, 2.5));
 
 //    s.radius = 10;
     Color background{0,0.5,0.5};
@@ -275,7 +274,7 @@ main(int argc, char** argv)
     const Vec origin{0,0,0};  // center of projection
 
     vector<Light> lights;
-    lights.emplace_back(Light{Vec{30,0,-2}, Color::white()});
+    lights.emplace_back(Light{Vec{30,30,-2}, Color::white()});
 //    lights.emplace_back(Light{Vec{-30,-20,1}});
 
     img_ptr = img;
@@ -337,7 +336,7 @@ main(int argc, char** argv)
 
 
                 px.clamp(0, 1);
-                px = px + scolor * 0.2;
+                px = px + scolor * 0.1;
                 px.clamp(0, 1);
                 intersect = true;
             }
