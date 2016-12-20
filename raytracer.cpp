@@ -126,7 +126,7 @@ struct Sphere : public Object {
             dist = min(dist1,dist2);
         }
 
-        return dist > 0;
+        return dist > 0.00001;
     }
 
     virtual Vec
@@ -251,7 +251,7 @@ main(int argc, char** argv)
     constexpr double ASPECT_RATIO = (double)W/H;
     constexpr double FOV = 100;
 
-    ofstream ofs{"out3.ppm"};    // http://netpbm.sourceforge.net/doc/ppm.html
+    ofstream ofs{"out4.ppm"};    // http://netpbm.sourceforge.net/doc/ppm.html
     ofs << "P3\n"
         << to_string(W) << " " << to_string(H) << "\n"
         << to_string(MAX_VAL) << "\n";
@@ -319,8 +319,6 @@ main(int argc, char** argv)
                     // check if object is blocking light
                     Ray shadow_ray{pintersect, lv};
                     for (const auto& o : objects) {
-                        if (&(*o) == curo)
-                            continue;
                         if ( o->intersect(shadow_ray, tmpdist) ) {
                             inShadow = true;
                             break;
