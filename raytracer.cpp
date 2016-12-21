@@ -7,6 +7,7 @@
 
 
 // url: https://www.scratchapixel.com/lessons/3d-basic-rendering/introduction-to-ray-tracing
+// operator overloading: http://stackoverflow.com/a/4421719/1959528
 
 using namespace std;
 
@@ -19,7 +20,7 @@ struct Vec3d {
     Vec3d(double x_, double y_, double z_) : x{x_}, y{y_}, z{z_} {}
     Vec3d(const Vec3d& v) : x{v.x}, y{v.y}, z{v.z} {}
 
-    Vec3d& operator-= (const Vec3d& rhs)
+    Vec3d& operator-=(const Vec3d& rhs)
     {
         x -= rhs.x;
         y -= rhs.y;
@@ -27,7 +28,7 @@ struct Vec3d {
         return *this;
     }
 
-    Vec3d& operator/= (const double v)
+    Vec3d& operator/=(const double v)
     {
         x /= v;
         y /= v;
@@ -35,7 +36,7 @@ struct Vec3d {
         return *this;
     }
 
-    Vec3d& operator+= (const Vec3d& rhs)
+    Vec3d& operator+=(const Vec3d& rhs)
     {
         x += rhs.x;
         y += rhs.y;
@@ -43,7 +44,7 @@ struct Vec3d {
         return *this;
     }
 
-    Vec3d& operator*= (double val)
+    Vec3d& operator*=(double val)
     {
         x *= val;
         y *= val;
@@ -65,27 +66,29 @@ struct Vec3d {
 
     Vec3d& normalize()
     {
-        double l = length();
-        *this /= l;
+        *this /= length();
         return *this;
     }
 };
 
 
-Vec3d operator- (Vec3d lhs, const Vec3d& rhs)
+Vec3d operator-(Vec3d lhs, const Vec3d& rhs)
 {
     return lhs -= rhs;
 }
 
-Vec3d operator/ (Vec3d lhs, const double v)  {
+Vec3d operator/(Vec3d lhs, const double v)
+{
     return lhs /= v;
 }
 
-Vec3d operator+ (Vec3d lhs, const Vec3d& rhs) {
+Vec3d operator+(Vec3d lhs, const Vec3d& rhs)
+{
     return lhs += rhs;
 }
 
-Vec3d operator* (Vec3d lhs, double val) {
+Vec3d operator*(Vec3d lhs, const double val)
+{
     return lhs *= val;
 }
 
@@ -134,7 +137,7 @@ struct Sphere : public Object {
         constexpr double eps = 0.00001;
         // (l * (o - c))^2 - || o - c ||^2 + r^2
         double val1, val2, val3, dist1, dist2;
-        const Vec3d temp = ray.origin-center;
+        const Vec3d temp{ray.origin-center};
         val1 = temp.dotProduct(ray.direction);
         val2 = temp.length();
         val3 = val1*val1 - val2*val2 + radius*radius;
@@ -161,7 +164,7 @@ struct Sphere : public Object {
     {
         // src: https://cs.colorado.edu/~mcbryan/5229.03/mail/110.htm
         Vec3d n{P - center};
-        n = n / radius;
+        n /= radius;
         return n;
     }
 };
@@ -204,7 +207,7 @@ struct Color {
         return *this;
     }
 
-    Color operator+= (const Color& rhs) {
+    Color& operator+=(const Color& rhs) {
         r += rhs.r;
         g += rhs.g;
         b += rhs.b;
@@ -215,7 +218,6 @@ struct Color {
         r *= d;
         g *= d;
         b *= d;
-
         return *this;
     }
 
@@ -249,13 +251,11 @@ Color operator+(Color lhs, const Color& rhs) {
 }
 
 Color operator*(Color lhs, const double d) {
-    lhs *= d;
-    return lhs;
+    return lhs *= d;
 }
 
 Color operator*(Color lhs, const Color& rhs) {
-    lhs *= rhs;
-    return lhs;
+    return lhs *= rhs;
 }
 
 
