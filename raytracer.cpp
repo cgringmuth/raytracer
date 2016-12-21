@@ -191,9 +191,9 @@ struct Color {
     Color(double r_, double g_, double b_): r{r_}, g{g_}, b{b_} {};
 
     Color& operator*=(double d) {
-        r += d;
-        g += d;
-        b += d;
+        r *= d;
+        g *= d;
+        b *= d;
         return *this;
     }
 
@@ -267,11 +267,20 @@ struct Light {
     Light(Vec3d pos_): pos{pos_}, color{Color::white()} {}
 };
 
+
+
 ostream&
 operator<<(ostream& os, const Color& c) {
     os << c.r << " " << c.g << " " << c.b << " ";
     return os;
 }
+
+ostream&
+operator<<(ostream& os, const Vec3d& v) {
+    os << v.x << " " << v.y << " " << v.z << " ";
+    return os;
+}
+
 
 /** Converts angle in degree into rad.
  *
@@ -283,10 +292,27 @@ double deg2rad(double ang) {
 }
 
 
+void check_op_overloading() {
+    Vec3d v1, v2{1,2,3};
+
+    v1 += v2;
+    cout << v1 << " == 1 2 3\n";
+    cout << v1*2 << " == 2 4 6\n";
+//    cout << v1+2 << " == 3 4 5\n";
+
+    Color c1, c2{1,2,3};
+    c1 += c2;
+    cout << c1 << " == 1 2 3\n";
+    cout << c1*c2 << " == 1 4 9\n";
+    cout << c1*2 << " == 2 4 6\n";
+}
+
+
 int
 main(int argc, char** argv)
 {
     cout << "... start ray tracer" << endl;
+    check_op_overloading();
 
     constexpr unsigned int H = 500;
     constexpr unsigned int W = 800;
