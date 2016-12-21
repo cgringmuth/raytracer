@@ -13,35 +13,45 @@ using namespace std;
 /** 3D vector in cartesian space.
  *
  */
-struct Vec {
+struct Vec3d {
     double x, y, z;
-    Vec() : x{0}, y{0}, z{0} {}
-    Vec(double x_, double y_, double z_) : x{x_}, y{y_}, z{z_} {}
-    Vec(const Vec& v) : x{v.x}, y{v.y}, z{v.z} {}
+    Vec3d() : x{0}, y{0}, z{0} {}
+    Vec3d(double x_, double y_, double z_) : x{x_}, y{y_}, z{z_} {}
+    Vec3d(const Vec3d& v) : x{v.x}, y{v.y}, z{v.z} {}
 
-    // const shows that the operator does not change the class
-    Vec operator- (const Vec& rhs) const
+    Vec3d& operator-= (const Vec3d& rhs)
     {
-        Vec temp;
-        temp.x = x - rhs.x;
-        temp.y = y - rhs.y;
-        temp.z = z - rhs.z;
-        return temp;
+        x -= rhs.x;
+        y -= rhs.y;
+        z -= rhs.z;
+        return *this;
     }
 
-    Vec operator/ (const double v) const {
-        return Vec{x/v, y/v, z/v};
+    Vec3d& operator/= (const double v)
+    {
+        x /= v;
+        y /= v;
+        z /= v;
+        return *this;
     }
 
-    Vec operator+ (const Vec& rhs) const {
-        return Vec{x+rhs.x, y+rhs.y, z+rhs.z};
+    Vec3d& operator+= (const Vec3d& rhs)
+    {
+        x += rhs.x;
+        y += rhs.y;
+        z += rhs.z;
+        return *this;
     }
 
-    Vec operator* (double val) const {
-        return Vec{x*val, y*val, z*val};
+    Vec3d& operator*= (double val)
+    {
+        x *= val;
+        y *= val;
+        z *= val;
+        return *this;
     }
 
-    double dotProduct(const Vec& vec2) const
+    double dotProduct(const Vec3d& vec2) const
     {
         return (x * vec2.x) +
                (y * vec2.y) +
@@ -53,28 +63,44 @@ struct Vec {
         return sqrt(dotProduct(*this));
     }
 
-    Vec& normalize()
+    Vec3d& normalize()
     {
         double l = length();
-        x /= l;
-        y /= l;
-        z /= l;
+        *this /= l;
         return *this;
     }
 };
+
+
+Vec3d operator- (Vec3d lhs, const Vec3d& rhs)
+{
+    return lhs -= rhs;
+}
+
+Vec3d operator/ (Vec3d lhs, const double v)  {
+    return lhs /= v;
+}
+
+Vec3d operator+ (Vec3d lhs, const Vec3d& rhs) {
+    return lhs += rhs;
+}
+
+Vec3d operator* (Vec3d lhs, double val) {
+    return lhs *= val;
+}
 
 /** Line which will be used for back raytracing
  *
  */
 struct Ray {
     // origin
-    Vec origin;
+    Vec3d origin;
     // direction
-    Vec direction;
+    Vec3d direction;
 
-    Ray(Vec o, Vec d): origin{o}, direction{d} {}
+    Ray(Vec3d o, Vec3d d): origin{o}, direction{d} {}
 
-    Vec getPoint(double dist) const
+    Vec3d getPoint(double dist) const
     {
         return origin + direction*dist;
     }
@@ -86,7 +112,7 @@ struct Ray {
  */
 struct Object {
     virtual bool intersect(const Ray& ray, double& dist) const = 0;
-    virtual Vec getNormal(const Vec& vec) const = 0;
+    virtual Vec3d getNormal(const Vec3d& vec) const = 0;
 
 };
 
@@ -95,10 +121,10 @@ struct Object {
  */
 struct Sphere : public Object {
     // define location + radius
-    Vec centerPoint;
+    Vec3d center;
     double radius;
 
-    Sphere(Vec c, double r): centerPoint{c}, radius{r} {}
+    Sphere(Vec3d c, double r): center{c}, radius{r} {}
 
     // get intersection with ray: refer: https://en.wikipedia.org/wiki/Line%E2%80%93sphere_intersection
     // more details: https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rendering-simple-shapes/ray-sphere-intersection
@@ -108,7 +134,7 @@ struct Sphere : public Object {
         constexpr double eps = 0.00001;
         // (l * (o - c))^2 - || o - c ||^2 + r^2
         double val1, val2, val3, dist1, dist2;
-        const Vec temp = ray.origin-centerPoint;
+        const Vec3d temp = ray.origin-center;
         val1 = temp.dotProduct(ray.direction);
         val2 = temp.length();
         val3 = val1*val1 - val2*val2 + radius*radius;
@@ -130,11 +156,11 @@ struct Sphere : public Object {
         return dist > eps;      //  neg. dist are behind ray; eps is for not hitting itself
     }
 
-    virtual Vec
-    getNormal(const Vec& P) const override
+    virtual Vec3d
+    getNormal(const Vec3d& P) const override
     {
         // src: https://cs.colorado.edu/~mcbryan/5229.03/mail/110.htm
-        Vec n{P - centerPoint};
+        Vec3d n{P - center};
         n = n / radius;
         return n;
     }
@@ -164,16 +190,18 @@ struct Color {
     Color(): r{0}, g{0}, b{0} {};
     Color(double r_, double g_, double b_): r{r_}, g{g_}, b{b_} {};
 
-    Color operator*(double d) {
-        return Color{r*d, g*d, b*d};
+    Color& operator*=(double d) {
+        r += d;
+        g += d;
+        b += d;
+        return *this;
     }
 
-    Color operator*(Color c) const {
-        return Color{r*c.r, g*c.g, b*c.b};
-    }
-
-    Color operator+(const Color& c) const {
-        return Color{r+c.r, g+c.g, b+c.b};
+    Color& operator*=(Color c) {
+        r *= c.r;
+        g *= c.g;
+        b *= c.b;
+        return *this;
     }
 
     Color operator+= (const Color& rhs) {
@@ -216,13 +244,27 @@ struct Color {
     }
  };
 
+Color operator+(Color lhs, const Color& rhs) {
+    return lhs += rhs;
+}
+
+Color operator*(Color lhs, const double d) {
+    lhs *= d;
+    return lhs;
+}
+
+Color operator*(Color lhs, const Color& rhs) {
+    lhs *= rhs;
+    return lhs;
+}
+
 
 struct Light {
+    Vec3d pos;
     Color color;
-    Vec pos;
 
-    Light(Vec pos_, Color color_): pos{pos_}, color{color_} {}
-    Light(Vec pos_): pos{pos_}, color{Color::white()} {}
+    Light(Vec3d pos_, Color color_): pos{pos_}, color{color_} {}
+    Light(Vec3d pos_): pos{pos_}, color{Color::white()} {}
 };
 
 ostream&
@@ -258,12 +300,12 @@ main(int argc, char** argv)
         << to_string(MAX_VAL) << "\n";
 
     vector<shared_ptr<Object>> objects;
-    objects.push_back(make_shared<Sphere>(Vec{0,0,-20}, 5));
+    objects.push_back(make_shared<Sphere>(Vec3d{0,0,-20}, 5));
 //    objects.push_back(make_shared<Sphere>(Vec{10,0,-20}, 5));
-    objects.push_back(make_shared<Sphere>(Vec{2,1,-15}, 1));
-    objects.push_back(make_shared<Sphere>(Vec{4,4,-22}, 2.5));
-    objects.push_back(make_shared<Sphere>(Vec{80,-6,-150}, 5));
-    objects.push_back(make_shared<Sphere>(Vec{-4,4,-5}, 2.5));
+    objects.push_back(make_shared<Sphere>(Vec3d{2,1,-15}, 1));
+    objects.push_back(make_shared<Sphere>(Vec3d{4,4,-22}, 2.5));
+    objects.push_back(make_shared<Sphere>(Vec3d{80,-6,-150}, 5));
+    objects.push_back(make_shared<Sphere>(Vec3d{-4,4,-5}, 2.5));
 
 //    s.radius = 10;
     Color background{0,0.5,0.5};
@@ -272,10 +314,10 @@ main(int argc, char** argv)
     Color* img = new Color[W*H];
     double* zbuff = new double[W*H];
     Color* img_ptr = img;
-    const Vec origin{0,0,0};  // center of projection
+    const Vec3d origin{0,0,0};  // center of projection
 
     vector<Light> lights;
-    lights.emplace_back(Light{Vec{30,30,-2}, Color::white()});
+    lights.emplace_back(Light{Vec3d{30,30,-2}, Color::white()});
 //    lights.emplace_back(Light{Vec{-30,-20,1}});
 
     img_ptr = img;
@@ -287,7 +329,7 @@ main(int argc, char** argv)
             const double cam_x = (2*px_ndc  - 1) * ASPECT_RATIO * tan(deg2rad(FOV)/2);
             const double cam_y = (1 - 2*py_ndc) * tan(deg2rad(FOV)/2);
 
-            Vec d{cam_x, cam_y, -1};
+            Vec3d d{cam_x, cam_y, -1};
             d.normalize();
             const Ray ray{origin, d};
 
@@ -308,11 +350,11 @@ main(int argc, char** argv)
             }
 
             if (curo != nullptr) {
-                Vec pintersect{ray.getPoint(dist)};
-                const Vec n{curo->getNormal(pintersect)};
+                Vec3d pintersect{ray.getPoint(dist)};
+                const Vec3d n{curo->getNormal(pintersect)};
 
                 for (const auto& l : lights) {
-                    Vec lv{l.pos - pintersect};
+                    Vec3d lv{l.pos - pintersect};
 //                    Vec lv{l.pos};
                     lv.normalize();
                     bool inShadow{false};
