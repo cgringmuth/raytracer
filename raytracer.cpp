@@ -105,6 +105,7 @@ struct Sphere : public Object {
     virtual bool
     intersect(const Ray& ray, double& dist) const override
     {
+        constexpr double eps = 0.00001;
         // (l * (o - c))^2 - || o - c ||^2 + r^2
         double val1, val2, val3, dist1, dist2;
         const Vec temp = ray.origin-centerPoint;
@@ -126,7 +127,7 @@ struct Sphere : public Object {
             dist = min(dist1,dist2);
         }
 
-        return dist > 0.00001;
+        return dist > eps;      //  neg. dist are behind ray; eps is for not hitting itself
     }
 
     virtual Vec
@@ -167,11 +168,11 @@ struct Color {
         return Color{r*d, g*d, b*d};
     }
 
-    Color operator*(Color c) {
+    Color operator*(Color c) const {
         return Color{r*c.r, g*c.g, b*c.b};
     }
 
-    Color operator+(const Color& c) {
+    Color operator+(const Color& c) const {
         return Color{r+c.r, g+c.g, b+c.b};
     }
 
@@ -179,7 +180,7 @@ struct Color {
         r += rhs.r;
         g += rhs.g;
         b += rhs.b;
-
+        return *this;
     }
 
     Color& mult(double d) {
