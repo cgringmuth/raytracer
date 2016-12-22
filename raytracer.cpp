@@ -68,11 +68,11 @@ struct Vec3d {
 
     double& operator[](size_t idx) {
         switch (idx) {
-            case 1:
+            case 0:
                 return x;
-            case 2:
+            case 1:
                 return y;
-            case 3:
+            case 2:
                 return z;
         }
     }
@@ -214,6 +214,11 @@ struct Color {
     static Color red() {
         return Color(1, 0, 0);
     }
+
+    static Color green() {
+        return Color(0, 1, 0);
+    }
+
 };
 
 Color operator+(Color lhs, const Color& rhs) {
@@ -267,14 +272,40 @@ struct Plane : public Object {
     double a, b, c, d;  // implicit description: ax + by + cz + d = 0
 
     Plane(double a, double b, double c, double d, const Color& color)
-            : a(a), b(b), c(c), d(d), Object(color) {}
+            : a(a), b(b), c(c), d(d), Object(color) {
+        // normalize normal vector
+        Vec3d pn{a,b,c};
+        pn.normalize();
+        a = pn[0];
+        b = pn[1];
+        c = pn[2];
+    }
+
+    Plane(Vec3d normal, double dist, const Color& color) : d{dist}, Object{color} {
+        normal.normalize(); // make sure normal is normalized
+        a = normal[0];
+        b = normal[1];
+        c = normal[2];
+    }
 
     bool intersect(const Ray& ray, double& dist, Vec3d& normal) const override {
-        return false;
+        const double eps{0.00001};
+        const Vec3d pnormal{a,b,c};
+        const double vd{pnormal.dotProduct(ray.direction)};
+
+        if (abs(vd) < eps)  // check if vd is 0 -> plane and ray parallel
+            false;
+        if (vd > 0)     // normal of plane is pointing away from camera (maybe handle differently)
+            false;
+
+        const double vo{pnormal.dotProduct(ray.origin) + d};
+        dist = -vo / vd;
+
+        return dist > eps;
     }
 
     Vec3d getNormal(const Vec3d& vec) const override {
-        return Vec3d{};
+        return Vec3d{a,b,c};
     }
 };
 
@@ -444,7 +475,7 @@ main(int argc, char** argv) {
     constexpr double ASPECT_RATIO = (double) W / H;
     constexpr double FOV = 100;
 
-    ofstream ofs{"out4.ppm"};    // http://netpbm.sourceforge.net/doc/ppm.html
+    ofstream ofs{"out5.ppm"};    // http://netpbm.sourceforge.net/doc/ppm.html
     ofs << "P3\n"
         << to_string(W) << " " << to_string(H) << "\n"
         << to_string(MAX_VAL) << "\n";
@@ -454,12 +485,28 @@ main(int argc, char** argv) {
 
 
     vector<shared_ptr<Object>> objects;
-    objects.push_back(make_shared<Sphere>(Vec3d{0, 0, -20}, 5, scolor));
+    objects.push_back(make_shared<Sphere>(Vec3d{0, 0, -10}, 3, scolor));
 //    objects.push_back(make_shared<Sphere>(Vec{10,0,-20}, 5, scolor));
-    objects.push_back(make_shared<Sphere>(Vec3d{2, 1, -15}, 1, Color{1, 1, 0}));
-    objects.push_back(make_shared<Sphere>(Vec3d{4, 4, -22}, 2.5, Color{0, 1, 0}));
+    objects.push_back(make_shared<Sphere>(Vec3d{2, 1, -6}, 1, Color{1, 1, 0}));
+    objects.push_back(make_shared<Sphere>(Vec3d{4, 4, -12}, 2.5, Color{0, 1, 0}));
     objects.push_back(make_shared<Sphere>(Vec3d{80, -6, -150}, 5, Color{0, 0, 1}));
     objects.push_back(make_shared<Sphere>(Vec3d{-4, 4, -5}, 2.5, Color{1, 0, 1}));
+
+
+    // planes
+    const int box_len{10};
+    // back
+    const Color wall_color{192.0 / 255, 155.0 / 255, 94.0 / 255};
+    objects.push_back(make_shared<Plane>(0, 0, 1, box_len+5, wall_color));
+    // left
+    objects.push_back(make_shared<Plane>(1, 0, 0, box_len, Color::red()));
+    // right
+    objects.push_back(make_shared<Plane>(-1, 0, 0, box_len, Color::green()));
+    // bottom
+    objects.push_back(make_shared<Plane>(0, 1, 0, box_len, wall_color));
+    // top
+    objects.push_back(make_shared<Plane>(0, -1, 0, box_len,wall_color));
+//    objects.push_back(make_shared<Plane>(0, -1, 0, 20, Color{0, 1, 0}));
 
 //    s.radius = 10;
 
@@ -469,7 +516,7 @@ main(int argc, char** argv) {
     const Vec3d origin{0, 0, 0};  // center of projection
 
     vector<Light> lights;
-    lights.emplace_back(Light{Vec3d{30, 30, -2}, Color::white()});
+    lights.emplace_back(Light{Vec3d{5, 5, -2}, Color::white()});
 //    lights.emplace_back(Light{Vec{-30,-20,1}});
 
     img_ptr = img;
@@ -510,13 +557,15 @@ main(int argc, char** argv) {
                 for (const auto& l : lights) {
                     Vec3d lv{l.pos - phit};
 //                    Vec lv{l.pos};
+                    const double ldist{lv.length()};
                     lv.normalize();
                     bool inShadow{false};
 
                     // check if other object is blocking light
                     const Ray shadow_ray{phit, lv};
                     for (const auto& o : objects) {
-                        if (o->intersect(shadow_ray, tmpdist, tmpnormal)) {
+                        const bool hit{o->intersect(shadow_ray, tmpdist, tmpnormal)};
+                        if (hit && tmpdist < ldist) {
                             inShadow = true;
                             break;
                         }
