@@ -475,17 +475,16 @@ main(int argc, char** argv) {
     constexpr double ASPECT_RATIO = (double) W / H;
     constexpr double FOV = 100;
 
-    ofstream ofs{"out5.ppm"};    // http://netpbm.sourceforge.net/doc/ppm.html
+    ofstream ofs{"out6.ppm"};    // http://netpbm.sourceforge.net/doc/ppm.html
     ofs << "P3\n"
         << to_string(W) << " " << to_string(H) << "\n"
         << to_string(MAX_VAL) << "\n";
 
     Color background{0, 0.5, 0.5};
-    Color scolor = Color::red();
 
 
     vector<shared_ptr<Object>> objects;
-    objects.push_back(make_shared<Sphere>(Vec3d{0, 0, -10}, 3, scolor));
+    objects.push_back(make_shared<Sphere>(Vec3d{0, 0, -10}, 3, Color::red()));
 //    objects.push_back(make_shared<Sphere>(Vec{10,0,-20}, 5, scolor));
     objects.push_back(make_shared<Sphere>(Vec3d{2, 1, -6}, 1, Color{1, 1, 0}));
     objects.push_back(make_shared<Sphere>(Vec3d{4, 4, -12}, 2.5, Color{0, 1, 0}));
@@ -516,7 +515,8 @@ main(int argc, char** argv) {
     const Vec3d origin{0, 0, 0};  // center of projection
 
     vector<Light> lights;
-    lights.emplace_back(Light{Vec3d{5, 5, -2}, Color::white()});
+    lights.emplace_back(Light{Vec3d{0, 9.5, -9}, Color::white()*3});
+    lights.emplace_back(Light{Vec3d{5, -5, -2}, Color::white()*1});
 //    lights.emplace_back(Light{Vec{-30,-20,1}});
 
     img_ptr = img;
@@ -576,10 +576,9 @@ main(int argc, char** argv) {
 
                     const double diff_factor{n.dotProduct(lv)};
                     px += cur_obj->color * l.color * (diff_factor/ldist);
+                    px.clamp(0, 1);
                 }
 
-
-                px.clamp(0, 1);
                 px = px + cur_obj->color * 0.1;
                 px.clamp(0, 1);
                 intersect = true;
