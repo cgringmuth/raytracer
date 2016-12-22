@@ -575,7 +575,7 @@ main(int argc, char** argv) {
                     }
 
                     const double diff_factor{n.dotProduct(lv)};
-                    px += cur_obj->color * l.color * diff_factor;
+                    px += cur_obj->color * l.color * (diff_factor/ldist);
                 }
 
 
