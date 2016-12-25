@@ -410,9 +410,9 @@ struct Light {
     Vec3d pos;
     Color color;
 
-    Light(Vec3d pos_, Color color_) : pos{pos_}, color{color_} {}
+    Light(Vec3d pos, Color color) : pos{pos}, color{color} {}
 
-    Light(Vec3d pos_) : pos{pos_}, color{Color::white()} {}
+    Light(Vec3d pos) : pos{pos}, color{Color::white()} {}
 };
 
 
@@ -470,10 +470,10 @@ main(int argc, char** argv) {
     check_op_overloading();
 
     constexpr unsigned int H = 500;
-    constexpr unsigned int W = 800;
+    constexpr unsigned int W = 700;
     constexpr unsigned int MAX_VAL = 255;
     constexpr double ASPECT_RATIO = (double) W / H;
-    constexpr double FOV = 100;
+    constexpr double FOV = 60;
 
     ofstream ofs{"out6.ppm"};    // http://netpbm.sourceforge.net/doc/ppm.html
     ofs << "P3\n"
@@ -484,19 +484,19 @@ main(int argc, char** argv) {
 
 
     vector<shared_ptr<Object>> objects;
-    objects.push_back(make_shared<Sphere>(Vec3d{0, 0, -10}, 3, Color::red()));
+    objects.push_back(make_shared<Sphere>(Vec3d{0, 0, -10}, 1.5, Color::red()));
 //    objects.push_back(make_shared<Sphere>(Vec{10,0,-20}, 5, scolor));
-    objects.push_back(make_shared<Sphere>(Vec3d{2, 1, -6}, 1, Color{1, 1, 0}));
-    objects.push_back(make_shared<Sphere>(Vec3d{4, 4, -12}, 2.5, Color{0, 1, 0}));
+    objects.push_back(make_shared<Sphere>(Vec3d{2, 0, -9}, 0.5, Color{1, 1, 0}));
+    objects.push_back(make_shared<Sphere>(Vec3d{-1, -1, -7}, 0.5, Color{0, 1, 0}));
     objects.push_back(make_shared<Sphere>(Vec3d{80, -6, -150}, 5, Color{0, 0, 1}));
-    objects.push_back(make_shared<Sphere>(Vec3d{-4, 4, -5}, 2.5, Color{1, 0, 1}));
+    objects.push_back(make_shared<Sphere>(Vec3d{-3, 2, -7}, 1, Color{1, 0, 1}));
 
 
     // planes
-    const int box_len{10};
+    const int box_len{5};
     // back
     const Color wall_color{192.0 / 255, 155.0 / 255, 94.0 / 255};
-    objects.push_back(make_shared<Plane>(0, 0, 1, box_len+5, wall_color));
+    objects.push_back(make_shared<Plane>(0, 0, 1, box_len+10, wall_color));
     // left
     objects.push_back(make_shared<Plane>(1, 0, 0, box_len, Color::red()));
     // right
@@ -515,9 +515,9 @@ main(int argc, char** argv) {
     const Vec3d origin{0, 0, 0};  // center of projection
 
     vector<Light> lights;
-    lights.emplace_back(Light{Vec3d{0, 8, -9}, Color::white()*3});
+    lights.emplace_back(Light{Vec3d{0, 3, -7.5}, Color::white()*5});
 //    lights.emplace_back(Light{Vec3d{0, 8, -9}, Color::white()*0.5});
-    lights.emplace_back(Light{Vec3d{5, -5, -2}, Color::white()*1});
+    lights.emplace_back(Light{Vec3d{-1, -1, -1}, Color::white()*2});
 //    lights.emplace_back(Light{Vec3d{5, -5, -2}, Color::white()*0.5});
 //    lights.emplace_back(Light{Vec{-30,-20,1}});
 
