@@ -246,7 +246,7 @@ struct Ray {
     Ray(Vec3d o, Vec3d d) : origin{o}, direction{d} {}
 
     Vec3d getPoint(double dist) const {
-        return origin + direction * dist;
+        return origin + (direction * dist);
     }
 };
 
@@ -515,8 +515,10 @@ main(int argc, char** argv) {
     const Vec3d origin{0, 0, 0};  // center of projection
 
     vector<Light> lights;
-    lights.emplace_back(Light{Vec3d{0, 9.5, -9}, Color::white()*3});
+    lights.emplace_back(Light{Vec3d{0, 8, -9}, Color::white()*3});
+//    lights.emplace_back(Light{Vec3d{0, 8, -9}, Color::white()*0.5});
     lights.emplace_back(Light{Vec3d{5, -5, -2}, Color::white()*1});
+//    lights.emplace_back(Light{Vec3d{5, -5, -2}, Color::white()*0.5});
 //    lights.emplace_back(Light{Vec{-30,-20,1}});
 
     img_ptr = img;
@@ -533,7 +535,7 @@ main(int argc, char** argv) {
             const Ray ray{origin, d};
 
             double dist{std::numeric_limits<double>::max()}, tmpdist;
-            Color px;
+            Color px_color;
             Vec3d tmpnormal, normal;
             bool intersect{false};
             Object* cur_obj{nullptr};
@@ -561,7 +563,7 @@ main(int argc, char** argv) {
                     lv.normalize();
                     bool inShadow{false};
 
-                    // check if other object is blocking light
+                    // cast shadow ray and check if other object is blocking light
                     const Ray shadow_ray{phit, lv};
                     for (const auto& o : objects) {
                         const bool hit{o->intersect(shadow_ray, tmpdist, tmpnormal)};
@@ -575,20 +577,22 @@ main(int argc, char** argv) {
                     }
 
                     const double diff_factor{n.dotProduct(lv)};
-                    px += cur_obj->color * l.color * (diff_factor/ldist);
-                    px.clamp(0, 1);
+                    if (diff_factor<0)  // todo: check why we have to skip negative values
+                        continue;
+                    px_color += cur_obj->color * l.color * (diff_factor/ldist);
+                    px_color.clamp(0, 1);
                 }
 
-                px = px + cur_obj->color * 0.1;
-                px.clamp(0, 1);
+                px_color = px_color + cur_obj->color * 0.1;
+                px_color.clamp(0, 1);
                 intersect = true;
             }
 
             if (!intersect) {
-                px = background;
+                px_color = background;
             }
 
-            *(img_ptr++) = px;
+            *(img_ptr++) = px_color;
         }
     }
 
