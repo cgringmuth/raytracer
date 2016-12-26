@@ -136,6 +136,17 @@ Vec3d operator*(Vec3d lhs, const double val) {
 }
 
 
+double dotProduct(const Vec3d& v1, const Vec3d& v2) {
+    return v1.dotProduct(v2);
+}
+
+
+ostream&
+operator<<(ostream& os, const Vec3d& v) {
+    os << v.x << " " << v.y << " " << v.z << " ";
+    return os;
+}
+
 /** Clips the value to min and max.
  * If the input value lies in [min,max], it will not be changed. Otherwise it will be set to min if val < min or to
  * max if val > max.
@@ -219,6 +230,10 @@ struct Color {
         return Color(0, 1, 0);
     }
 
+    static Color blue() {
+        return Color(0,0,1);
+    }
+
 };
 
 Color operator+(Color lhs, const Color& rhs) {
@@ -289,16 +304,17 @@ struct Plane : public Object {
     }
 
     bool intersect(const Ray& ray, double& dist, Vec3d& normal) const override {
+        //src: https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/ray-triangle-intersection-geometric-solution
         const double eps{0.00001};
-        const Vec3d pnormal{a,b,c};
-        const double vd{pnormal.dotProduct(ray.direction)};
+        normal = Vec3d{a,b,c};
+        const double vd{normal.dotProduct(ray.direction)};
 
         if (abs(vd) < eps)  // check if vd is 0 -> plane and ray parallel
             false;
         if (vd > 0)     // normal of plane is pointing away from camera (maybe handle differently)
             false;
 
-        const double vo{pnormal.dotProduct(ray.origin) + d};
+        const double vo{normal.dotProduct(ray.origin) + d};
         dist = -vo / vd;
 
         return dist > eps;
@@ -310,17 +326,59 @@ struct Plane : public Object {
 };
 
 struct Triangle : public Object {
-    Vec3d v1, v2, v3;
+    Vec3d v0, v1, v2;
 
-    Triangle(const Vec3d& tv1, const Vec3d& tv2, const Vec3d& tv3, const Color& color)
-            : v1{tv1}, v2{tv2}, v3{tv3}, Object{color} {}
+    Triangle(const Vec3d& v0, const Vec3d& v1, const Vec3d& v2, const Color& color)
+            : v0{v0}, v1{v1}, v2{v2}, Object{color} {}
 
     virtual bool intersect(const Ray& ray, double& dist, Vec3d& normal) const override {
+        const double eps{0.00001};
+        normal = getNormal(v0);
+        Plane plane{normal,-normal.dotProduct(v1), Color::white()};
+//        cout << ray.direction << endl;
 
+        if (!plane.intersect(ray, dist, normal)) {
+            return false;
+        }
+
+        const Vec3d hit{ray.getPoint(dist)}; // get point on plane
+
+//        cout << "hit: " << hit << " hit length:" << hit.length() << endl;
+
+        // do the "inside-outside" test
+        const Vec3d edge0{v1-v0};
+        const Vec3d vp0{hit-v0};
+//        cout << "edge0: " << edge0 << " vp0: " << vp0 << endl;
+        if (dotProduct(cross_product(edge0, vp0), normal) < 0) {
+            return false;
+        }
+
+        const Vec3d edge1{v2-v1};
+        const Vec3d vp1{hit-v1};
+//        cout << "edge1: " << edge1 << " vp1: " << vp1 << endl;
+        if (dotProduct(cross_product(edge1, vp1), normal) < 0) {
+            return false;
+        }
+
+        const Vec3d edge2{v0-v2};
+        const Vec3d vp2{hit-v2};
+//        cout << "edge2: " << edge2 << " vp2: " << vp2 << endl;
+        if (dotProduct(cross_product(edge2, vp2), normal) < 0) {
+            return false;
+        }
+
+//        cout << "dist: " << eps << endl;
+
+        return dist > eps;
     }
 
     virtual Vec3d getNormal(const Vec3d& vec) const override {
-
+        const Vec3d edge1{v2 - v0};
+        const Vec3d edge0{v1 - v0};
+        Vec3d normal{cross_product(edge0, edge1)};
+        normal.normalize();
+//        cout << "normal: " << normal << endl;
+        return normal;
     }
 };
 
@@ -422,12 +480,6 @@ operator<<(ostream& os, const Color& c) {
     return os;
 }
 
-ostream&
-operator<<(ostream& os, const Vec3d& v) {
-    os << v.x << " " << v.y << " " << v.z << " ";
-    return os;
-}
-
 
 /** Converts angle in degree into rad.
  *
@@ -464,6 +516,81 @@ void check_op_overloading() {
 }
 
 
+void
+create_box(vector<shared_ptr<Object>>& objects)
+{
+    const int y_offset{-3};
+    const int x_offset{2};
+    const int z_offset{-9};
+
+    const int x_width_half{1};
+    const int y_width_half{1};
+    const int z_width_half{1};
+
+    /**
+     *       6-------5
+     *      /|      /|
+     *    /  |     / |
+     *   0-------3   |
+     *   |   7---|---4
+     *   |  /    |  /
+     *   |/      |/
+     *   1-------2
+     */
+
+    // front
+    const Vec3d v0{x_offset-x_width_half,y_offset+y_width_half,z_offset+z_width_half};
+    const Vec3d v1{x_offset-x_width_half,y_offset-y_width_half,z_offset+z_width_half};
+    const Vec3d v2{x_offset+x_width_half,y_offset-y_width_half,z_offset+z_width_half};
+    const Vec3d v3{x_offset+x_width_half,y_offset+y_width_half,z_offset+z_width_half};
+    // back
+    const Vec3d v5{x_offset+x_width_half,y_offset+y_width_half,z_offset-z_width_half};
+    const Vec3d v4{x_offset+x_width_half,y_offset-y_width_half,z_offset-z_width_half};
+    const Vec3d v6{x_offset-x_width_half,y_offset+y_width_half,z_offset-z_width_half};
+    const Vec3d v7{x_offset-x_width_half,y_offset-y_width_half,z_offset-z_width_half};
+
+    const Color color{192.0 / 255, 155.0 / 255, 94.0 / 255};
+
+
+    // front
+    // 0---3
+    // | \ |
+    // 1---2
+    objects.push_back(make_shared<Triangle>( v0, v1, v2, color));
+    objects.push_back(make_shared<Triangle>( v0, v2, v3, color));
+    // right
+    // 3---5
+    // | \ |
+    // 2---4
+    objects.push_back(make_shared<Triangle>( v3, v2, v4, color));
+    objects.push_back(make_shared<Triangle>( v3, v4, v5, color));
+    // back
+    // 5---6
+    // | \ |
+    // 4---7
+    objects.push_back(make_shared<Triangle>( v5, v4, v7, color));
+    objects.push_back(make_shared<Triangle>( v5, v7, v6, color));
+    // left
+    // 6---0
+    // | \ |
+    // 7---1
+    objects.push_back(make_shared<Triangle>( v6, v7, v1, color));
+    objects.push_back(make_shared<Triangle>( v6, v1, v0, color));
+    // top
+    // 6---5
+    // | \ |
+    // 0---3
+    objects.push_back(make_shared<Triangle>( v6, v0, v3, color));
+    objects.push_back(make_shared<Triangle>( v6, v3, v5, color));
+    // bottom
+    // 7---4
+    // | \ |
+    // 1---2
+    objects.push_back(make_shared<Triangle>( v7, v1, v2, color));
+    objects.push_back(make_shared<Triangle>( v7, v2, v4, color));
+}
+
+
 int
 main(int argc, char** argv) {
     cout << "... start ray tracer" << endl;
@@ -475,7 +602,7 @@ main(int argc, char** argv) {
     constexpr double ASPECT_RATIO = (double) W / H;
     constexpr double FOV = 60;
 
-    ofstream ofs{"out6.ppm"};    // http://netpbm.sourceforge.net/doc/ppm.html
+    ofstream ofs{"out7.ppm"};    // http://netpbm.sourceforge.net/doc/ppm.html
     ofs << "P3\n"
         << to_string(W) << " " << to_string(H) << "\n"
         << to_string(MAX_VAL) << "\n";
@@ -487,9 +614,11 @@ main(int argc, char** argv) {
     objects.push_back(make_shared<Sphere>(Vec3d{0, 0, -10}, 1.5, Color::red()));
 //    objects.push_back(make_shared<Sphere>(Vec{10,0,-20}, 5, scolor));
     objects.push_back(make_shared<Sphere>(Vec3d{2, 0, -9}, 0.5, Color{1, 1, 0}));
-    objects.push_back(make_shared<Sphere>(Vec3d{-1, -1, -7}, 0.5, Color{0, 1, 0}));
+    objects.push_back(make_shared<Sphere>(Vec3d{-1, -1, -7}, 0.5, Color::blue()));
     objects.push_back(make_shared<Sphere>(Vec3d{80, -6, -150}, 5, Color{0, 0, 1}));
     objects.push_back(make_shared<Sphere>(Vec3d{-3, 2, -7}, 1, Color{1, 0, 1}));
+
+    create_box(objects);
 
 
     // planes
@@ -505,7 +634,7 @@ main(int argc, char** argv) {
     objects.push_back(make_shared<Plane>(0, 1, 0, box_len, wall_color));
     // top
     objects.push_back(make_shared<Plane>(0, -1, 0, box_len,wall_color));
-//    objects.push_back(make_shared<Plane>(0, -1, 0, 20, Color{0, 1, 0}));
+    objects.push_back(make_shared<Plane>(0, -1, 0, 20, Color{0, 1, 0}));
 
 //    s.radius = 10;
 
@@ -515,9 +644,9 @@ main(int argc, char** argv) {
     const Vec3d origin{0, 0, 0};  // center of projection
 
     vector<Light> lights;
-    lights.emplace_back(Light{Vec3d{0, 3, -7.5}, Color::white()*5});
+    lights.emplace_back(Light{Vec3d{0, 3, -7.5}, Color::white()*20});
 //    lights.emplace_back(Light{Vec3d{0, 8, -9}, Color::white()*0.5});
-    lights.emplace_back(Light{Vec3d{-1, -1, -1}, Color::white()*2});
+    lights.emplace_back(Light{Vec3d{-1, -1, -1}, Color::white()*10});
 //    lights.emplace_back(Light{Vec3d{5, -5, -2}, Color::white()*0.5});
 //    lights.emplace_back(Light{Vec{-30,-20,1}});
 
@@ -530,7 +659,7 @@ main(int argc, char** argv) {
             const double cam_x = (2 * px_ndc - 1) * ASPECT_RATIO * tan(deg2rad(FOV) / 2);
             const double cam_y = (1 - 2 * py_ndc) * tan(deg2rad(FOV) / 2);
 
-            Vec3d d{cam_x, cam_y, -1};
+            Vec3d d{cam_x, cam_y, -1};  // camera looks in negative z direction
             d.normalize();
             const Ray ray{origin, d};
 
@@ -555,6 +684,7 @@ main(int argc, char** argv) {
             if (cur_obj != nullptr) {
                 Vec3d phit{ray.getPoint(dist)};
                 const Vec3d n{cur_obj->getNormal(phit)};
+//                cout << typeid(*cur_obj).name() << " ";
 
                 for (const auto& l : lights) {
                     Vec3d lv{l.pos - phit};
@@ -576,10 +706,9 @@ main(int argc, char** argv) {
                         continue;
                     }
 
-                    const double diff_factor{n.dotProduct(lv)};
-                    if (diff_factor<0)  // todo: check why we have to skip negative values
-                        continue;
-                    px_color += cur_obj->color * l.color * (diff_factor/ldist);
+                    const double diff_factor{std::max(n.dotProduct(lv), 0.0)};    // todo: check why we have to clip negative values
+//                    const double diff_factor{n.dotProduct(lv)};
+                    px_color += cur_obj->color * l.color * (diff_factor/(ldist*ldist));
                     px_color.clamp(0, 1);
                 }
 
