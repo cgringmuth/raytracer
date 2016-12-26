@@ -334,7 +334,9 @@ struct Triangle : public Object {
     virtual bool intersect(const Ray& ray, double& dist, Vec3d& normal) const override {
         const double eps{0.00001};
         normal = getNormal(v0);
-        Plane plane{normal,-normal.dotProduct(v1), Color::white()};
+        Plane plane{normal,
+                    -normal.dotProduct(v1),  // todo: check if this is correct (seems more as an workaround)
+                    Color::white()};
 //        cout << ray.direction << endl;
 
         if (!plane.intersect(ray, dist, normal)) {
@@ -393,11 +395,23 @@ struct Model : Object {
 
     bool intersect(const Ray& ray, double& dist, Vec3d& normal) const override {
         // todo: through all faces and give closest distance which is not negative and return normal also (for all)
-        return false;
+        double tmpdist;
+        Vec3d tmpnormal;
+        dist = std::numeric_limits<double>::max();
+        bool hit{false};
+        const double eps{0.00001};
+        for (const auto& f : faces) {
+            if (f.intersect(ray, tmpdist, tmpnormal) && tmpdist < dist) {
+                dist = tmpdist;
+                normal = tmpnormal;
+                hit = true;
+            }
+        }
+        return hit && dist > eps;
     }
 
     Vec3d getNormal(const Vec3d& vec) const override {
-        return Vec3d{};
+        return Vec3d{};     // fixme: currently broken
     }
 
 };
@@ -451,6 +465,7 @@ struct Sphere : public Object {
         } else if (dist1 > 0 && dist2 > 0) {
             dist = min(dist1, dist2);
         }
+        normal = getNormal(ray.getPoint(dist));
 
         return dist > eps;      //  neg. dist are behind ray; eps is for not hitting itself
     }
@@ -528,6 +543,7 @@ create_box(vector<shared_ptr<Object>>& objects)
     const int z_width_half{1};
 
     /**
+     * adopted from: http://stackoverflow.com/a/8142461/1959528
      *       6-------5
      *      /|      /|
      *    /  |     / |
@@ -549,45 +565,60 @@ create_box(vector<shared_ptr<Object>>& objects)
     const Vec3d v6{x_offset-x_width_half,y_offset+y_width_half,z_offset-z_width_half};
     const Vec3d v7{x_offset-x_width_half,y_offset-y_width_half,z_offset-z_width_half};
 
-    const Color color{192.0 / 255, 155.0 / 255, 94.0 / 255};
+//    const Color color{192.0 / 255, 155.0 / 255, 94.0 / 255};
+    const Color color = Color::blue();
+    vector<Triangle> triangles;
 
 
     // front
     // 0---3
     // | \ |
     // 1---2
-    objects.push_back(make_shared<Triangle>( v0, v1, v2, color));
-    objects.push_back(make_shared<Triangle>( v0, v2, v3, color));
+    triangles.emplace_back(Triangle{v0, v1, v2, color});
+    triangles.emplace_back(Triangle{v0, v2, v3, color});
+//    objects.push_back(make_shared<Triangle>( v0, v1, v2, color));
+//    objects.push_back(make_shared<Triangle>( v0, v2, v3, color));
     // right
     // 3---5
     // | \ |
     // 2---4
-    objects.push_back(make_shared<Triangle>( v3, v2, v4, color));
-    objects.push_back(make_shared<Triangle>( v3, v4, v5, color));
+    triangles.emplace_back(Triangle{v3, v2, v4, color});
+    triangles.emplace_back(Triangle{v3, v4, v5, color});
+//    objects.push_back(make_shared<Triangle>( v3, v2, v4, color));
+//    objects.push_back(make_shared<Triangle>( v3, v4, v5, color));
     // back
     // 5---6
     // | \ |
     // 4---7
-    objects.push_back(make_shared<Triangle>( v5, v4, v7, color));
-    objects.push_back(make_shared<Triangle>( v5, v7, v6, color));
+    triangles.emplace_back(Triangle{v5, v4, v7, color});
+    triangles.emplace_back(Triangle{v5, v7, v6, color});
+//    objects.push_back(make_shared<Triangle>( v5, v4, v7, color));
+//    objects.push_back(make_shared<Triangle>( v5, v7, v6, color));
     // left
     // 6---0
     // | \ |
     // 7---1
-    objects.push_back(make_shared<Triangle>( v6, v7, v1, color));
-    objects.push_back(make_shared<Triangle>( v6, v1, v0, color));
+    triangles.emplace_back(Triangle{v6, v7, v1, color});
+    triangles.emplace_back(Triangle{v6, v1, v0, color});
+//    objects.push_back(make_shared<Triangle>( v6, v7, v1, color));
+//    objects.push_back(make_shared<Triangle>( v6, v1, v0, color));
     // top
     // 6---5
     // | \ |
     // 0---3
-    objects.push_back(make_shared<Triangle>( v6, v0, v3, color));
-    objects.push_back(make_shared<Triangle>( v6, v3, v5, color));
+    triangles.emplace_back(Triangle{v6, v0, v3, color});
+    triangles.emplace_back(Triangle{v6, v3, v5, color});
+//    objects.push_back(make_shared<Triangle>( v6, v0, v3, color));
+//    objects.push_back(make_shared<Triangle>( v6, v3, v5, color));
     // bottom
     // 7---4
     // | \ |
     // 1---2
-    objects.push_back(make_shared<Triangle>( v7, v1, v2, color));
-    objects.push_back(make_shared<Triangle>( v7, v2, v4, color));
+    triangles.emplace_back(Triangle{v7, v1, v2, color});
+    triangles.emplace_back(Triangle{v7, v1, v2, color});
+//    objects.push_back(make_shared<Triangle>( v7, v1, v2, color));
+//    objects.push_back(make_shared<Triangle>( v7, v1, v2, color));
+    objects.push_back(make_shared<Model>(color, triangles));
 }
 
 
@@ -602,7 +633,7 @@ main(int argc, char** argv) {
     constexpr double ASPECT_RATIO = (double) W / H;
     constexpr double FOV = 60;
 
-    ofstream ofs{"out7.ppm"};    // http://netpbm.sourceforge.net/doc/ppm.html
+    ofstream ofs{"out8.ppm"};    // http://netpbm.sourceforge.net/doc/ppm.html
     ofs << "P3\n"
         << to_string(W) << " " << to_string(H) << "\n"
         << to_string(MAX_VAL) << "\n";
@@ -613,7 +644,7 @@ main(int argc, char** argv) {
     vector<shared_ptr<Object>> objects;
     objects.push_back(make_shared<Sphere>(Vec3d{0, 0, -10}, 1.5, Color::red()));
 //    objects.push_back(make_shared<Sphere>(Vec{10,0,-20}, 5, scolor));
-    objects.push_back(make_shared<Sphere>(Vec3d{2, 0, -9}, 0.5, Color{1, 1, 0}));
+    objects.push_back(make_shared<Sphere>(Vec3d{1.75, -1.5, -9}, 0.3, Color{1, 1, 0}));
     objects.push_back(make_shared<Sphere>(Vec3d{-1, -1, -7}, 0.5, Color::blue()));
     objects.push_back(make_shared<Sphere>(Vec3d{80, -6, -150}, 5, Color{0, 0, 1}));
     objects.push_back(make_shared<Sphere>(Vec3d{-3, 2, -7}, 1, Color{1, 0, 1}));
@@ -646,7 +677,7 @@ main(int argc, char** argv) {
     vector<Light> lights;
     lights.emplace_back(Light{Vec3d{0, 3, -7.5}, Color::white()*20});
 //    lights.emplace_back(Light{Vec3d{0, 8, -9}, Color::white()*0.5});
-    lights.emplace_back(Light{Vec3d{-1, -1, -1}, Color::white()*10});
+    lights.emplace_back(Light{Vec3d{-1, -1, -1}, Color::white()*7});
 //    lights.emplace_back(Light{Vec3d{5, -5, -2}, Color::white()*0.5});
 //    lights.emplace_back(Light{Vec{-30,-20,1}});
 
@@ -683,7 +714,6 @@ main(int argc, char** argv) {
 
             if (cur_obj != nullptr) {
                 Vec3d phit{ray.getPoint(dist)};
-                const Vec3d n{cur_obj->getNormal(phit)};
 //                cout << typeid(*cur_obj).name() << " ";
 
                 for (const auto& l : lights) {
@@ -706,13 +736,14 @@ main(int argc, char** argv) {
                         continue;
                     }
 
-                    const double diff_factor{std::max(n.dotProduct(lv), 0.0)};    // todo: check why we have to clip negative values
+                    const double diff_factor{std::max(normal.dotProduct(lv), 0.0)};    // todo: check why we have to clip negative values
 //                    const double diff_factor{n.dotProduct(lv)};
                     px_color += cur_obj->color * l.color * (diff_factor/(ldist*ldist));
                     px_color.clamp(0, 1);
                 }
 
-                px_color = px_color + cur_obj->color * 0.1;
+                double ka = 0.2;    // ambient light
+                px_color = px_color + cur_obj->color * ka;
                 px_color.clamp(0, 1);
                 intersect = true;
             }
