@@ -21,7 +21,6 @@
  *
  * - Add material with different reflection models (diffuse, specular, refraction etc.)
  * - Implement ply file loading -> very first draft implemented
- * - Implement Multithreading
  *
  */
 
@@ -177,6 +176,7 @@ T clamp(T min, T max, T val) {
     return val;
 }
 
+
 /** Container to save pixel color information in rgb format.
  *
  */
@@ -291,15 +291,30 @@ struct Ray {
 };
 
 
+
+struct Material {
+    Color color;
+    double ka;  // ambient reflectance
+    double kd;  // diffuse reflectance
+
+    double ks;  // specular reflectance
+    double specRefExp; // specular-reflection exponent
+
+    Material(const Color& color) : color(color), ka{0.1}, kd{0.5}, ks{0}, specRefExp{8} {}
+
+    Material() : color{} {}
+};
+
+
 /** Generic base class for all objects which shall be rendered
  *
  */
 struct Object {
-    Color color;
+    Material material;
 
-    Object(const Color& color) : color(color) {}
+    Object(const Color& color) : material(color) {}
 
-    Object() : color{} {}
+    Object() : material{} {}
 
     virtual bool intersect(const Ray& ray, double& dist, Vec3d& normal) const = 0;
 
@@ -514,7 +529,8 @@ struct Model : Object {
         }
 
         model->faces = faces;
-        model->color = color;
+        model->material = Material(color);
+        model->material.ks = 0.3;
 
         return model;
     }
@@ -556,19 +572,6 @@ struct Model : Object {
 
 };
 
-namespace ply {
-    Model load_model(string filename);
-}
-
-Model ply::load_model(string filename) {
-    Model model;
-
-    // parse header
-
-    // parse content
-
-    return model;
-}
 
 /** The most common object to be rendered in a raytracer
  *
@@ -801,6 +804,7 @@ render(Color* img, unsigned int x_start, unsigned int y_start, unsigned int cH, 
             }
 
             if (cur_obj != nullptr) {
+                Material& cmat = cur_obj->material;
                 Vec3d phit{ray.getPoint(dist)};
 //                cout << typeid(*cur_obj).name() << " ";
 
@@ -824,15 +828,23 @@ render(Color* img, unsigned int x_start, unsigned int y_start, unsigned int cH, 
                         continue;
                     }
 
-                    const double diff_factor{
+                    const double cosPhi{
                             std::max(normal.dotProduct(lv), 0.0)};    // todo: check why we have to clip negative values
-//                    const double diff_factor{n.dotProduct(lv)};
-                    px_color += cur_obj->color * l.color * (diff_factor / (ldist * ldist));
+//                    const double cosPhi{n.dotProduct(lv)};
+
+                    // diffuse shading
+                    px_color += cmat.color * l.color * cmat.kd * (cosPhi / (ldist * ldist));
+                    // specular shading
+                    const Vec3d reflectRay{normal*2*dotProduct(normal,lv) -lv};
+                    const double cosAlpha{
+                            std::max(reflectRay.dotProduct(lv), 0.0)};    // todo: check why we have to clip negative values
+                    px_color += cmat.color * l.color * cmat.kd * (pow(cosAlpha, cmat.specRefExp) / (ldist * ldist));
+
                     px_color.clamp(0, 1);
                 }
 
                 double ka = 0.2;    // ambient light
-                px_color = px_color + cur_obj->color * ka;
+                px_color = px_color + cmat.color * cmat.ka;
                 px_color.clamp(0, 1);
                 intersect = true;
             }
@@ -855,8 +867,8 @@ main(int argc, char** argv) {
     // resolution has to be even
     constexpr unsigned int H = 500;
     constexpr unsigned int W = 700;
-//    constexpr unsigned int H = 50;
-//    constexpr unsigned int W = 70;
+//    constexpr unsigned int H = 250;
+//    constexpr unsigned int W = 350;
     constexpr unsigned int MAX_VAL = 255;
     constexpr double ASPECT_RATIO = (double) W / H;
     constexpr double FOV = 60;
