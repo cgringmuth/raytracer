@@ -879,12 +879,13 @@ main(int argc, char** argv) {
     objects.push_back(make_shared<Sphere>(Vec3d{-3, 2, -7}, 1, Color{1, 0, 1}));
 
     create_box(objects);
-//    shared_ptr<Model> bunny{Model::load_ply("/home/chris/shared/github/chris/raytracer/data/3d_meshes/bunny/reconstruction/bun_zipper_res4.ply")};
-    shared_ptr<Model> bunny{Model::load_ply(
-            "/home/chris/shared/github/chris/raytracer/data/3d_meshes/bunny/reconstruction/bun_zipper.ply")};
+    string root{"/home/chris/shared/github/chris/raytracer/data/3d_meshes/bunny/reconstruction/"};
+    string bunny_res4_path{root+"bun_zipper_res4.ply"};
+    string bunny_path{root+"bun_zipper.ply"};
+    shared_ptr<Model> bunny{Model::load_ply(bunny_path)};
     bunny->scale(15);
     bunny->translate(Vec3d{-2, -4, -7.5});
-//    objects.push_back(bunny);
+    objects.push_back(bunny);
 
 
     // planes
