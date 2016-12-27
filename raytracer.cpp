@@ -826,6 +826,9 @@ main(int argc, char** argv) {
     img_ptr = img;
     for (unsigned int y = 0; y < H; ++y) {
         for (unsigned int x = 0; x < W; ++x) {
+            const unsigned int cur_px{y*W+x+1};
+            // note: progress does not work when someone introduce line breaks
+            cout  << "pixel: " << cur_px << "/" << H*W << "\t" << (int) ((cur_px*100.0)/(H*W)) << "%\r";
 
             const double px_ndc = (x + 0.5) / W;
             const double py_ndc = (y + 0.5) / H;
