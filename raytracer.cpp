@@ -6,6 +6,8 @@
 #include <memory>
 #include <limits>
 #include <stdlib.h>
+#include <iomanip>
+#include <thread>
 
 
 // url: https://www.scratchapixel.com/lessons/3d-basic-rendering/introduction-to-ray-tracing
@@ -128,7 +130,6 @@ Vec3d Vec3d::cross_product(const Vec3d& v) const {
 }
 
 
-
 Vec3d operator-(Vec3d lhs, const Vec3d& rhs) {
     return lhs -= rhs;
 }
@@ -183,7 +184,9 @@ struct Color {
     double r, g, b;
 
     Color() : r{0}, g{0}, b{0} {};
+
     Color(const double v) : r{v}, g{v}, b{v} {};
+
     Color(double r, double g, double b) : r{r}, g{g}, b{b} {};
 
     Color& operator*=(double d) {
@@ -245,7 +248,7 @@ struct Color {
     }
 
     static Color blue() {
-        return Color(0,0,1);
+        return Color(0, 0, 1);
     }
 
     static Color gray() {
@@ -311,7 +314,7 @@ struct Plane : public Object {
     Plane(double a, double b, double c, double d, const Color& color)
             : a(a), b(b), c(c), d(d), Object(color) {
         // normalize normal vector
-        Vec3d pn{a,b,c};
+        Vec3d pn{a, b, c};
         pn.normalize();
         a = pn[0];
         b = pn[1];
@@ -328,7 +331,7 @@ struct Plane : public Object {
     bool intersect(const Ray& ray, double& dist, Vec3d& normal) const override {
         //src: https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/ray-triangle-intersection-geometric-solution
         const double eps{0.00001};
-        normal = Vec3d{a,b,c};
+        normal = Vec3d{a, b, c};
         const double vd{normal.dotProduct(ray.direction)};
 
         if (abs(vd) < eps)  // check if vd is 0 -> plane and ray parallel
@@ -343,7 +346,7 @@ struct Plane : public Object {
     }
 
     Vec3d getNormal(const Vec3d& vec) const override {
-        return Vec3d{a,b,c};
+        return Vec3d{a, b, c};
     }
 };
 
@@ -352,6 +355,7 @@ struct Triangle : public Object {
 
     Triangle(const Vec3d& v0, const Vec3d& v1, const Vec3d& v2, const Color& color)
             : v0{v0}, v1{v1}, v2{v2}, Object{color} {}
+
     Triangle(const Vec3d& v0, const Vec3d& v1, const Vec3d& v2)
             : v0{v0}, v1{v1}, v2{v2} {}
 
@@ -374,22 +378,22 @@ struct Triangle : public Object {
 //        cout << "hit: " << hit << " hit length:" << hit.length() << endl;
 
         // do the "inside-outside" test
-        const Vec3d edge0{v1-v0};
-        const Vec3d vp0{hit-v0};
+        const Vec3d edge0{v1 - v0};
+        const Vec3d vp0{hit - v0};
 //        cout << "edge0: " << edge0 << " vp0: " << vp0 << endl;
         if (dotProduct(cross_product(edge0, vp0), normal) < 0) {
             return false;
         }
 
-        const Vec3d edge1{v2-v1};
-        const Vec3d vp1{hit-v1};
+        const Vec3d edge1{v2 - v1};
+        const Vec3d vp1{hit - v1};
 //        cout << "edge1: " << edge1 << " vp1: " << vp1 << endl;
         if (dotProduct(cross_product(edge1, vp1), normal) < 0) {
             return false;
         }
 
-        const Vec3d edge2{v0-v2};
-        const Vec3d vp2{hit-v2};
+        const Vec3d edge2{v0 - v2};
+        const Vec3d vp2{hit - v2};
 //        cout << "edge2: " << edge2 << " vp2: " << vp2 << endl;
         if (dotProduct(cross_product(edge2, vp2), normal) < 0) {
             return false;
@@ -449,7 +453,7 @@ struct Model : Object {
 
     static shared_ptr<Model> load_ply(const string& fname) {
         shared_ptr<Model> model{make_shared<Model>()};
-        Color color{Color::light_gray()};
+        Color color{Color::white()};
 
         ifstream ifs{fname};
         if (!ifs.is_open())
@@ -462,7 +466,7 @@ struct Model : Object {
 
         unsigned int nfaces, nvertices;
 
-        while ( true ) {
+        while (true) {
             stringstream ss{line};
             ss >> key;
             if (key == "ply") {
@@ -488,16 +492,16 @@ struct Model : Object {
         vector<Triangle> faces;
 
         // read vertices
-        for (int i=0; i<nvertices; ++i) {
+        for (int i = 0; i < nvertices; ++i) {
             getline(ifs, line);
             stringstream ss{line};
             double x, y, z;
             ss >> x >> y >> z;
-            vertices.emplace_back(Vec3d{x,y,z});
+            vertices.emplace_back(Vec3d{x, y, z});
         }
 
         // read faces
-        for (int i=0; i<nfaces; ++i) {
+        for (int i = 0; i < nfaces; ++i) {
             getline(ifs, line);
             stringstream ss{line};
             int num, iv0, iv1, iv2;
@@ -668,8 +672,7 @@ void check_op_overloading() {
 
 
 void
-create_box(vector<shared_ptr<Object>>& objects)
-{
+create_box(vector<shared_ptr<Object>>& objects) {
     const int y_offset{-3};
     const int x_offset{2};
     const int z_offset{-9};
@@ -691,15 +694,15 @@ create_box(vector<shared_ptr<Object>>& objects)
      */
 
     // front
-    const Vec3d v0{x_offset-x_width_half,y_offset+y_width_half,z_offset+z_width_half};
-    const Vec3d v1{x_offset-x_width_half,y_offset-y_width_half,z_offset+z_width_half};
-    const Vec3d v2{x_offset+x_width_half,y_offset-y_width_half,z_offset+z_width_half};
-    const Vec3d v3{x_offset+x_width_half,y_offset+y_width_half,z_offset+z_width_half};
+    const Vec3d v0{x_offset - x_width_half, y_offset + y_width_half, z_offset + z_width_half};
+    const Vec3d v1{x_offset - x_width_half, y_offset - y_width_half, z_offset + z_width_half};
+    const Vec3d v2{x_offset + x_width_half, y_offset - y_width_half, z_offset + z_width_half};
+    const Vec3d v3{x_offset + x_width_half, y_offset + y_width_half, z_offset + z_width_half};
     // back
-    const Vec3d v5{x_offset+x_width_half,y_offset+y_width_half,z_offset-z_width_half};
-    const Vec3d v4{x_offset+x_width_half,y_offset-y_width_half,z_offset-z_width_half};
-    const Vec3d v6{x_offset-x_width_half,y_offset+y_width_half,z_offset-z_width_half};
-    const Vec3d v7{x_offset-x_width_half,y_offset-y_width_half,z_offset-z_width_half};
+    const Vec3d v5{x_offset + x_width_half, y_offset + y_width_half, z_offset - z_width_half};
+    const Vec3d v4{x_offset + x_width_half, y_offset - y_width_half, z_offset - z_width_half};
+    const Vec3d v6{x_offset - x_width_half, y_offset + y_width_half, z_offset - z_width_half};
+    const Vec3d v7{x_offset - x_width_half, y_offset - y_width_half, z_offset - z_width_half};
 
 //    const Color color{192.0 / 255, 155.0 / 255, 94.0 / 255};
     const Color color = Color::blue();
@@ -759,76 +762,16 @@ create_box(vector<shared_ptr<Object>>& objects)
 }
 
 
-int
-main(int argc, char** argv) {
-    cout << "... start ray tracer" << endl;
-//    check_op_overloading();
-
-    constexpr unsigned int H = 500;
-    constexpr unsigned int W = 700;
-//    constexpr unsigned int H = 50;
-//    constexpr unsigned int W = 70;
-    constexpr unsigned int MAX_VAL = 255;
-    constexpr double ASPECT_RATIO = (double) W / H;
-    constexpr double FOV = 60;
-
-    ofstream ofs{"out8.ppm"};    // http://netpbm.sourceforge.net/doc/ppm.html
-    ofs << "P3\n"
-        << to_string(W) << " " << to_string(H) << "\n"
-        << to_string(MAX_VAL) << "\n";
-
-    Color background{0, 0.5, 0.5};
-
-
-    vector<shared_ptr<Object>> objects;
-    objects.push_back(make_shared<Sphere>(Vec3d{0, 0, -10}, 1.5, Color::red()));
-//    objects.push_back(make_shared<Sphere>(Vec{10,0,-20}, 5, scolor));
-    objects.push_back(make_shared<Sphere>(Vec3d{1.75, -1.5, -9}, 0.3, Color{1, 1, 0}));
-    objects.push_back(make_shared<Sphere>(Vec3d{-1, -1, -7}, 0.5, Color::blue()));
-    objects.push_back(make_shared<Sphere>(Vec3d{80, -6, -150}, 5, Color{0, 0, 1}));
-    objects.push_back(make_shared<Sphere>(Vec3d{-3, 2, -7}, 1, Color{1, 0, 1}));
-
-    create_box(objects);
-    shared_ptr<Model> bunny{Model::load_ply("/home/chris/shared/github/chris/raytracer/data/3d_meshes/bunny/reconstruction/bun_zipper_res4.ply")};
-    bunny->scale(15);
-    bunny->translate(Vec3d{-2,-4,-7.5});
-    objects.push_back(bunny);
-
-
-    // planes
-    const int box_len{5};
-    // back
-    const Color wall_color{192.0 / 255, 155.0 / 255, 94.0 / 255};
-    objects.push_back(make_shared<Plane>(0, 0, 1, box_len+10, wall_color));
-    // left
-    objects.push_back(make_shared<Plane>(1, 0, 0, box_len, Color::red()));
-    // right
-    objects.push_back(make_shared<Plane>(-1, 0, 0, box_len, Color::green()));
-    // bottom
-    objects.push_back(make_shared<Plane>(0, 1, 0, box_len, wall_color));
-    // top
-    objects.push_back(make_shared<Plane>(0, -1, 0, box_len,wall_color));
-
-//    s.radius = 10;
-
-    Color* img = new Color[W * H];
-    double* zbuff = new double[W * H];
-    Color* img_ptr = img;
-    const Vec3d origin{0, 0, 0};  // center of projection
-
-    vector<Light> lights;
-    lights.emplace_back(Light{Vec3d{0, 3, -7.5}, Color::white()*20});
-//    lights.emplace_back(Light{Vec3d{0, 8, -9}, Color::white()*0.5});
-    lights.emplace_back(Light{Vec3d{-1, -1, -1}, Color::white()*7});
-//    lights.emplace_back(Light{Vec3d{5, -5, -2}, Color::white()*0.5});
-//    lights.emplace_back(Light{Vec{-30,-20,1}});
-
-    img_ptr = img;
-    for (unsigned int y = 0; y < H; ++y) {
-        for (unsigned int x = 0; x < W; ++x) {
-            const unsigned int cur_px{y*W+x+1};
+void
+render(Color* img, unsigned int x_start, unsigned int y_start, unsigned int cH, unsigned int cW, const unsigned int H, const unsigned int W,
+       const double ASPECT_RATIO, const double FOV, const Vec3d& origin, const vector<shared_ptr<Object>>& objects,
+       const vector<Light>& lights, const Color& background) {
+    for (unsigned int y = y_start; y < cH+y_start; ++y) {
+        Color* img_ptr{img + y*W + x_start};
+        for (unsigned int x = x_start; x < cW+x_start; ++x) {
+            const unsigned int cur_px{y * W + x + 1};
             // note: progress does not work when someone introduce line breaks
-            cout  << "pixel: " << cur_px << "/" << H*W << "\t" << (int) ((cur_px*100.0)/(H*W)) << "%\r";
+//            cout << "pixel: " << cur_px << "/" << H * W << "\t" << (int) ((cur_px * 100.0) / (H * W)) << "%\r";
 
             const double px_ndc = (x + 0.5) / W;
             const double py_ndc = (y + 0.5) / H;
@@ -881,9 +824,10 @@ main(int argc, char** argv) {
                         continue;
                     }
 
-                    const double diff_factor{std::max(normal.dotProduct(lv), 0.0)};    // todo: check why we have to clip negative values
+                    const double diff_factor{
+                            std::max(normal.dotProduct(lv), 0.0)};    // todo: check why we have to clip negative values
 //                    const double diff_factor{n.dotProduct(lv)};
-                    px_color += cur_obj->color * l.color * (diff_factor/(ldist*ldist));
+                    px_color += cur_obj->color * l.color * (diff_factor / (ldist * ldist));
                     px_color.clamp(0, 1);
                 }
 
@@ -900,6 +844,115 @@ main(int argc, char** argv) {
             *(img_ptr++) = px_color;
         }
     }
+}
+
+
+int
+main(int argc, char** argv) {
+    cout << "... start ray tracer" << endl;
+//    check_op_overloading();
+
+    // resolution has to be even
+    constexpr unsigned int H = 500;
+    constexpr unsigned int W = 700;
+//    constexpr unsigned int H = 50;
+//    constexpr unsigned int W = 70;
+    constexpr unsigned int MAX_VAL = 255;
+    constexpr double ASPECT_RATIO = (double) W / H;
+    constexpr double FOV = 60;
+
+//    ofstream ofs{"bunny_high_res.ppm"};    // http://netpbm.sourceforge.net/doc/ppm.html
+    ofstream ofs{"out9.ppm"};    // http://netpbm.sourceforge.net/doc/ppm.html
+    ofs << "P3\n"
+        << to_string(W) << " " << to_string(H) << "\n"
+        << to_string(MAX_VAL) << "\n";
+
+    Color background{0, 0.5, 0.5};
+
+
+    vector<shared_ptr<Object>> objects;
+    objects.push_back(make_shared<Sphere>(Vec3d{0, 0, -10}, 1.5, Color::red()));
+//    objects.push_back(make_shared<Sphere>(Vec{10,0,-20}, 5, scolor));
+    objects.push_back(make_shared<Sphere>(Vec3d{1.75, -1.5, -9}, 0.3, Color{1, 1, 0}));
+    objects.push_back(make_shared<Sphere>(Vec3d{-1, -1, -7}, 0.5, Color::blue()));
+    objects.push_back(make_shared<Sphere>(Vec3d{80, -6, -150}, 5, Color{0, 0, 1}));
+    objects.push_back(make_shared<Sphere>(Vec3d{-3, 2, -7}, 1, Color{1, 0, 1}));
+
+    create_box(objects);
+//    shared_ptr<Model> bunny{Model::load_ply("/home/chris/shared/github/chris/raytracer/data/3d_meshes/bunny/reconstruction/bun_zipper_res4.ply")};
+    shared_ptr<Model> bunny{Model::load_ply(
+            "/home/chris/shared/github/chris/raytracer/data/3d_meshes/bunny/reconstruction/bun_zipper.ply")};
+    bunny->scale(15);
+    bunny->translate(Vec3d{-2, -4, -7.5});
+//    objects.push_back(bunny);
+
+
+    // planes
+    const int box_len{5};
+    // back
+    const Color wall_color{192.0 / 255, 155.0 / 255, 94.0 / 255};
+    objects.push_back(make_shared<Plane>(0, 0, 1, box_len + 10, wall_color));
+    // left
+    objects.push_back(make_shared<Plane>(1, 0, 0, box_len, Color::red()));
+    // right
+    objects.push_back(make_shared<Plane>(-1, 0, 0, box_len, Color::green()));
+    // bottom
+    objects.push_back(make_shared<Plane>(0, 1, 0, box_len, wall_color));
+    // top
+    objects.push_back(make_shared<Plane>(0, -1, 0, box_len, wall_color));
+
+//    s.radius = 10;
+
+    Color* img = new Color[W * H];
+    double* zbuff = new double[W * H];
+    Color* img_ptr = img;
+    const Vec3d origin{0, 0, 0};  // center of projection
+
+    vector<Light> lights;
+    lights.emplace_back(Light{Vec3d{0, 3, -7.5}, Color::white() * 20});
+//    lights.emplace_back(Light{Vec3d{0, 8, -9}, Color::white()*0.5});
+    lights.emplace_back(Light{Vec3d{-1, -1, -1}, Color::white() * 7});
+//    lights.emplace_back(Light{Vec3d{5, -5, -2}, Color::white()*0.5});
+//    lights.emplace_back(Light{Vec{-30,-20,1}});
+
+
+    // 7 threads
+    const int num_threads{7};   // max: num available threads - 1
+    thread threads[num_threads];
+
+    // split image into parts (2x4)
+    const unsigned int nXParts{2};
+    const unsigned int nYParts{4};
+    const unsigned int pW{W/nXParts};
+    const unsigned int pH{H/nYParts};
+    const unsigned int im_stride{W};
+
+    // start threads
+    unsigned int x_start{0};
+    unsigned int y_start{0};
+//    cout << "pW: " << pW << " pH: " << pH << endl;
+    for (unsigned int n=0; n<num_threads; ++n) {
+//        cout << "thread: " << n << ", x_start: " << x_start << ", y_start: " << y_start << endl;
+
+        threads[n] = thread{render, img, x_start, y_start, pH, pW, H, W, ASPECT_RATIO, FOV, origin, objects,
+         lights, background};
+
+        x_start += pW;
+        if (x_start >= W) {
+            x_start = 0;
+            y_start += pH;
+        }
+    }
+
+    // main thread does the rest
+    render(img, x_start, y_start, pH, pW, H, W, ASPECT_RATIO, FOV, origin, objects, lights, background);
+
+    // wait for other threads to finish
+    for (unsigned int n=0; n<num_threads; ++n) {
+        if (threads[n].joinable())
+            threads[n].join();
+    }
+
 
 
     // write image to file
