@@ -61,6 +61,13 @@ struct Vec3d {
         return *this;
     }
 
+    Vec3d& operator+=(const double d) {
+        x += d;
+        y += d;
+        z += d;
+        return *this;
+    }
+
     Vec3d& operator*=(double val) {
         x *= val;
         y *= val;
@@ -121,6 +128,7 @@ Vec3d Vec3d::cross_product(const Vec3d& v) const {
 }
 
 
+
 Vec3d operator-(Vec3d lhs, const Vec3d& rhs) {
     return lhs -= rhs;
 }
@@ -131,6 +139,10 @@ Vec3d operator/(Vec3d lhs, const double v) {
 
 Vec3d operator+(Vec3d lhs, const Vec3d& rhs) {
     return lhs += rhs;
+}
+
+Vec3d operator+(Vec3d lhs, const double d) {
+    return lhs += d;
 }
 
 Vec3d operator*(Vec3d lhs, const double val) {
@@ -171,8 +183,8 @@ struct Color {
     double r, g, b;
 
     Color() : r{0}, g{0}, b{0} {};
-
-    Color(double r_, double g_, double b_) : r{r_}, g{g_}, b{b_} {};
+    Color(const double v) : r{v}, g{v}, b{v} {};
+    Color(double r, double g, double b) : r{r}, g{g}, b{b} {};
 
     Color& operator*=(double d) {
         r *= d;
@@ -234,6 +246,14 @@ struct Color {
 
     static Color blue() {
         return Color(0,0,1);
+    }
+
+    static Color gray() {
+        return Color(0.5);
+    }
+
+    static Color light_gray() {
+        return Color(0.75);
     }
 
 };
@@ -332,10 +352,14 @@ struct Triangle : public Object {
 
     Triangle(const Vec3d& v0, const Vec3d& v1, const Vec3d& v2, const Color& color)
             : v0{v0}, v1{v1}, v2{v2}, Object{color} {}
+    Triangle(const Vec3d& v0, const Vec3d& v1, const Vec3d& v2)
+            : v0{v0}, v1{v1}, v2{v2} {}
 
     virtual bool intersect(const Ray& ray, double& dist, Vec3d& normal) const override {
         const double eps{0.00001};
         normal = getNormal(v0);
+//        cout << normal << endl;
+//        cout << "v0: " << v0 << "v1: " << v1 << "v2: " << v2 << endl;
         Plane plane{normal,
                     -normal.dotProduct(v1),  // todo: check if this is correct (seems more as an workaround)
                     Color::white()};
@@ -384,7 +408,35 @@ struct Triangle : public Object {
 //        cout << "normal: " << normal << endl;
         return normal;
     }
+
+    void scale(double s) {
+        v0 *= s;
+        v1 *= s;
+        v2 *= s;
+    }
+
+    Triangle& operator+=(const double t) {
+        v0 += t;
+        v1 += t;
+        v2 += t;
+        return *this;
+    }
+
+    Triangle& operator+=(const Vec3d& v) {
+        v0 += v;
+        v1 += v;
+        v2 += v;
+        return *this;
+    }
 };
+
+Triangle operator+(Triangle lhs, const double t) {
+    return lhs += t;
+}
+
+Triangle operator+(Triangle lhs, const Vec3d& v) {
+    return lhs += v;
+}
 
 struct Model : Object {
     vector<Triangle> faces;
@@ -478,6 +530,20 @@ struct Model : Object {
             }
         }
         return hit && dist > eps;
+    }
+
+    Model& scale(double s) {
+        for (auto& f : faces) {
+            f.scale(s);
+        }
+        return *this;
+    }
+
+    Model& translate(const Vec3d& t) {
+        for (auto& f : faces) {
+            f += t;
+        }
+        return *this;
     }
 
     Vec3d getNormal(const Vec3d& vec) const override {
@@ -688,17 +754,20 @@ create_box(vector<shared_ptr<Object>>& objects)
     triangles.emplace_back(Triangle{v7, v1, v2, color});
 //    objects.push_back(make_shared<Triangle>( v7, v1, v2, color));
 //    objects.push_back(make_shared<Triangle>( v7, v1, v2, color));
-    objects.push_back(make_shared<Model>(color, triangles));
+    shared_ptr<Model> model{make_shared<Model>(color, triangles)};
+    objects.push_back(model);
 }
 
 
 int
 main(int argc, char** argv) {
     cout << "... start ray tracer" << endl;
-    check_op_overloading();
+//    check_op_overloading();
 
     constexpr unsigned int H = 500;
     constexpr unsigned int W = 700;
+//    constexpr unsigned int H = 50;
+//    constexpr unsigned int W = 70;
     constexpr unsigned int MAX_VAL = 255;
     constexpr double ASPECT_RATIO = (double) W / H;
     constexpr double FOV = 60;
@@ -720,6 +789,10 @@ main(int argc, char** argv) {
     objects.push_back(make_shared<Sphere>(Vec3d{-3, 2, -7}, 1, Color{1, 0, 1}));
 
     create_box(objects);
+    shared_ptr<Model> bunny{Model::load_ply("/home/chris/shared/github/chris/raytracer/data/3d_meshes/bunny/reconstruction/bun_zipper_res4.ply")};
+    bunny->scale(15);
+    bunny->translate(Vec3d{-2,-4,-7.5});
+    objects.push_back(bunny);
 
 
     // planes
@@ -735,7 +808,6 @@ main(int argc, char** argv) {
     objects.push_back(make_shared<Plane>(0, 1, 0, box_len, wall_color));
     // top
     objects.push_back(make_shared<Plane>(0, -1, 0, box_len,wall_color));
-    objects.push_back(make_shared<Plane>(0, -1, 0, 20, Color{0, 1, 0}));
 
 //    s.radius = 10;
 
