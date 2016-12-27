@@ -300,7 +300,7 @@ struct Material {
     double ks;  // specular reflectance
     double specRefExp; // specular-reflection exponent
 
-    Material(const Color& color) : color(color), ka{0.1}, kd{0.5}, ks{0}, specRefExp{8} {}
+    Material(const Color& color) : color(color), ka{0.15}, kd{0.7}, ks{3}, specRefExp{8} {}
 
     Material() : color{} {}
 };
@@ -530,7 +530,7 @@ struct Model : Object {
 
         model->faces = faces;
         model->material = Material(color);
-        model->material.ks = 0.3;
+        model->material.ks = 0.6;
 
         return model;
     }
@@ -838,12 +838,10 @@ render(Color* img, unsigned int x_start, unsigned int y_start, unsigned int cH, 
                     const Vec3d reflectRay{normal*2*dotProduct(normal,lv) -lv};
                     const double cosAlpha{
                             std::max(reflectRay.dotProduct(lv), 0.0)};    // todo: check why we have to clip negative values
-                    px_color += cmat.color * l.color * cmat.kd * (pow(cosAlpha, cmat.specRefExp) / (ldist * ldist));
+                    px_color += cmat.color * l.color * cmat.ks * (pow(cosAlpha, cmat.specRefExp) / (ldist * ldist));
 
                     px_color.clamp(0, 1);
                 }
-
-                double ka = 0.2;    // ambient light
                 px_color = px_color + cmat.color * cmat.ka;
                 px_color.clamp(0, 1);
                 intersect = true;
@@ -861,12 +859,22 @@ render(Color* img, unsigned int x_start, unsigned int y_start, unsigned int cH, 
 
 int
 main(int argc, char** argv) {
+
+    string outFilename{"out10.ppm"};
+    if(argc > 1)
+    {
+        if (string(argv[1]) == "-o") {
+            outFilename = argv[2];
+        }
+    }
+
+
     cout << "... start ray tracer" << endl;
 //    check_op_overloading();
 
     // resolution has to be even
-    constexpr unsigned int H = 500;
-    constexpr unsigned int W = 700;
+    constexpr unsigned int H = 600;
+    constexpr unsigned int W = 800;
 //    constexpr unsigned int H = 250;
 //    constexpr unsigned int W = 350;
     constexpr unsigned int MAX_VAL = 255;
@@ -874,7 +882,7 @@ main(int argc, char** argv) {
     constexpr double FOV = 60;
 
 //    ofstream ofs{"bunny_high_res.ppm"};    // http://netpbm.sourceforge.net/doc/ppm.html
-    ofstream ofs{"out9.ppm"};    // http://netpbm.sourceforge.net/doc/ppm.html
+    ofstream ofs{outFilename};    // http://netpbm.sourceforge.net/doc/ppm.html
     ofs << "P3\n"
         << to_string(W) << " " << to_string(H) << "\n"
         << to_string(MAX_VAL) << "\n";
@@ -883,7 +891,11 @@ main(int argc, char** argv) {
 
 
     vector<shared_ptr<Object>> objects;
-    objects.push_back(make_shared<Sphere>(Vec3d{0, 0, -10}, 1.5, Color::red()));
+    shared_ptr<Sphere> s = make_shared<Sphere>(Vec3d{0, 0, -10}, 1, Color::red());
+    s->material.ks = 0.7;
+    s->material.kd = 0.2;
+    s->material.ka = 0.1;
+    objects.push_back(s);
 //    objects.push_back(make_shared<Sphere>(Vec{10,0,-20}, 5, scolor));
     objects.push_back(make_shared<Sphere>(Vec3d{1.75, -1.5, -9}, 0.3, Color{1, 1, 0}));
     objects.push_back(make_shared<Sphere>(Vec3d{-1, -1, -7}, 0.5, Color::blue()));
@@ -894,7 +906,7 @@ main(int argc, char** argv) {
     string root{"/home/chris/shared/github/chris/raytracer/data/3d_meshes/bunny/reconstruction/"};
     string bunny_res4_path{root+"bun_zipper_res4.ply"};
     string bunny_path{root+"bun_zipper.ply"};
-    shared_ptr<Model> bunny{Model::load_ply(bunny_path)};
+    shared_ptr<Model> bunny{Model::load_ply(bunny_res4_path)};
     bunny->scale(15);
     bunny->translate(Vec3d{-2, -4, -7.5});
     objects.push_back(bunny);
