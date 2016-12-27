@@ -1,9 +1,11 @@
 #include <iostream>
+#include <sstream>
 #include <math.h>
 #include <fstream>
 #include <vector>
 #include <memory>
 #include <limits>
+#include <stdlib.h>
 
 
 // url: https://www.scratchapixel.com/lessons/3d-basic-rendering/introduction-to-ray-tracing
@@ -15,9 +17,9 @@
 /**
  * TODOs
  *
- * - Implement triangle class with intersect and normal
  * - Add material with different reflection models (diffuse, specular, refraction etc.)
- * - Implement ply file loading
+ * - Implement ply file loading -> very first draft implemented
+ * - Implement Multithreading
  *
  */
 
@@ -392,6 +394,74 @@ struct Model : Object {
     Model(const Color& color) : Object(color) {}
 
     Model() {}
+
+    static shared_ptr<Model> load_ply(const string& fname) {
+        shared_ptr<Model> model{make_shared<Model>()};
+        Color color{Color::light_gray()};
+
+        ifstream ifs{fname};
+        if (!ifs.is_open())
+            return model;
+
+        string line, key;
+        unsigned int val;
+        getline(ifs, line);
+        bool ply_type{false};
+
+        unsigned int nfaces, nvertices;
+
+        while ( true ) {
+            stringstream ss{line};
+            ss >> key;
+            if (key == "ply") {
+                ply_type = false;
+            } else if (key == "comment") {
+                // ignore for now
+            } else if (key == "end_header") {
+                break;
+            } else if (key == "element") {
+                ss >> key >> val;
+                if (key == "vertex") {
+                    nvertices = val;
+                } else if (key == "face") {
+                    nfaces = val;
+                }
+            }
+            // ignore all other keys for now
+            getline(ifs, line);
+        }
+
+        // assume coordinates x, y, z come first and ignore all other following values
+        vector<Vec3d> vertices;
+        vector<Triangle> faces;
+
+        // read vertices
+        for (int i=0; i<nvertices; ++i) {
+            getline(ifs, line);
+            stringstream ss{line};
+            double x, y, z;
+            ss >> x >> y >> z;
+            vertices.emplace_back(Vec3d{x,y,z});
+        }
+
+        // read faces
+        for (int i=0; i<nfaces; ++i) {
+            getline(ifs, line);
+            stringstream ss{line};
+            int num, iv0, iv1, iv2;
+            ss >> num >> iv0 >> iv1 >> iv2;
+            if (num != 3) {
+                cerr << "Only triangles supported\n";
+                exit(1);
+            }
+            faces.emplace_back(Triangle{vertices[iv0], vertices[iv1], vertices[iv2]});
+        }
+
+        model->faces = faces;
+        model->color = color;
+
+        return model;
+    }
 
     bool intersect(const Ray& ray, double& dist, Vec3d& normal) const override {
         // todo: through all faces and give closest distance which is not negative and return normal also (for all)
