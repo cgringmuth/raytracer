@@ -479,7 +479,7 @@ struct Model : Object {
 
         ifstream ifs{fname};
         if (!ifs.is_open())
-            return model;
+            throw runtime_error{"Model "+fname+" could not be loaded. File does not exists."};
 
         string line, key;
         unsigned int val;
