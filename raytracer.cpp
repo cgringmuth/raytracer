@@ -787,7 +787,26 @@ show_progress(cv::Mat& img, double* progressArr, int numProg, int delay = 1000)
         }
         progress /= numProg;
         progress *= 100;
-        cv::putText(tmpimg, to_string((int)progress) + "%", cv::Point{10, 25}, CV_FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar::all(255), 1);
+
+        const string text{to_string((int)progress) + "%"};
+        const int fontFace = CV_FONT_HERSHEY_SIMPLEX;
+        double fontScale = 0.7;
+        const cv::Scalar color{cv::Scalar::all(255)};
+        const int thickness = 1;
+        int baseLine{0};
+        const cv::Size textSize{cv::getTextSize(text, fontFace, fontScale, thickness, &baseLine)};
+        const int x{10};
+        const int y{10};
+        const int border{8};
+        const double alpha{0.2};
+
+        // draw box;
+        cv::Rect roi{x, y, textSize.width+border, textSize.height+border};
+        cv::Mat foo{roi.height, roi.width, tmpimg.type(), cv::Scalar::all(130)};
+        cv::Mat cropped{tmpimg(roi)};
+        cv::putText(foo, text, cv::Point{border/2, textSize.height+border/2}, fontFace, fontScale, color, thickness);
+        cv::addWeighted(cropped, alpha, foo, 1-alpha, 0, cropped);
+
         cv::imshow(winName, tmpimg);
         key = cv::waitKey(delay);
         if ((key & 0xff) == 27) {
@@ -914,7 +933,7 @@ colorize_image_tile(cv::Mat img, int num, int x_start, int y_start, int pW, int 
     // color each part differently
     cv::Mat tile{img(cv::Rect{x_start, y_start, pW, pH})};
     tile = bgColors[num]*0.2;
-    cv::Size textSize = cv::getTextSize(text, fontFace, fontScale, thickness, &baseline);
+    const cv::Size textSize{cv::getTextSize(text, fontFace, fontScale, thickness, &baseline)};
     cv::putText(tile, text, cv::Point{pW / 2 - textSize.width/2, pH / 2}, fontFace, fontScale, cv::Scalar::all(255), thickness);
 }
 
