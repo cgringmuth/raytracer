@@ -951,7 +951,7 @@ create_scene(vector<shared_ptr<Object>>& objects, vector<Light>& lights) {
     const string root{"/home/chris/shared/github/chris/raytracer/data/3d_meshes/bunny/reconstruction/"};
     string bunny_res4_path{root+"bun_zipper_res4.ply"};
     string bunny_path{root+"bun_zipper.ply"};
-    shared_ptr<Model> bunny{Model::load_ply(bunny_res4_path)};
+    shared_ptr<Model> bunny{Model::load_ply(bunny_path)};
     bunny->scale(15);
     bunny->translate(Vec3d{-2, -4, -7.5});
     objects.push_back(bunny);
