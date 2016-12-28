@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <iomanip>
 #include <thread>
+#include <exception>
 
 #include <opencv2/opencv.hpp>
 
