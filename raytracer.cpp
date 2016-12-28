@@ -775,7 +775,7 @@ create_box(vector<shared_ptr<Object>>& objects) {
 
 
 void
-show_progress(cv::Mat& img, double* progressArr, int numProg, int delay = 1000)
+preview(cv::Mat& img, double* progressArr, int numProg, int delay = 1000)
 {
     int key;
     double progress;
@@ -949,13 +949,21 @@ create_scene(vector<shared_ptr<Object>>& objects, vector<Light>& lights) {
     objects.push_back(make_shared<Sphere>(Vec3d{-3, 2, -7}, 1, Color{1, 0, 1}));
 
     create_box(objects);
-    const string root{"/home/chris/shared/github/chris/raytracer/data/3d_meshes/bunny/reconstruction/"};
-    string bunny_res4_path{root+"bun_zipper_res4.ply"};
-    string bunny_path{root+"bun_zipper.ply"};
+    const string mesh_root{"/home/chris/shared/github/chris/raytracer/data/3d_meshes/"};
+    string bunny_res4_path{mesh_root+"bunny/reconstruction/bun_zipper_res4.ply"};
+    string bunny_path{mesh_root+"bunny/reconstruction/bun_zipper.ply"};
     shared_ptr<Model> bunny{Model::load_ply(bunny_path)};
     bunny->scale(15);
     bunny->translate(Vec3d{-2, -4, -7.5});
     objects.push_back(bunny);
+
+    string buddha_res4_path{mesh_root+"happy_recon/happy_vrip_res4.ply"};
+    string buddha_path{mesh_root+"happy_recon/happy_vrip.ply"};
+    shared_ptr<Model> buddha{Model::load_ply(buddha_path)};
+    buddha->scale(15);
+    buddha->translate(Vec3d{2, -4, -7.5});
+    buddha->material.ks = 0.9;
+    objects.push_back(buddha);
 
 
     // planes
@@ -995,8 +1003,9 @@ main(int argc, char** argv) {
 //    check_op_overloading();
 
     // resolution has to be even
-    constexpr unsigned int H = 600;
-    constexpr unsigned int W = 800;
+    constexpr unsigned int downScale{1};
+    constexpr unsigned int H{600/downScale};
+    constexpr unsigned int W{800/downScale};
     ImageType* img_ptr = new ImageType[W*H*3];
     memset(img_ptr, 0, sizeof(ImageType)*W*H*3);
     cv::Mat img{H, W, CV_8UC3, img_ptr};
@@ -1028,7 +1037,7 @@ main(int argc, char** argv) {
     const unsigned int pH{H/nYTiles};
 
     // starting thread to show progress
-    thread thread_show{show_progress, std::ref(img), progress, num_threads, 100};
+    thread thread_show{preview, std::ref(img), progress, num_threads, 100};
 
     // start threads
     unsigned int x_start{0};
@@ -1049,6 +1058,7 @@ main(int argc, char** argv) {
     // main thread does the rest
     colorize_image_tile(img, ctr, x_start, y_start, pW, pH);
     render(img_ptr, x_start, y_start, pH, pW, H, W, ASPECT_RATIO, FOV, origin, objects, lights, background, progress[ctr]);
+    processing = false;
 
     // wait for other threads to finish
     for (unsigned int n=0; n<num_threads-1; ++n) {
@@ -1056,8 +1066,6 @@ main(int argc, char** argv) {
         if (threads[n].joinable())
             threads[n].join();
     }
-
-    processing = false;
     if (thread_show.joinable())
         thread_show.join();
 
