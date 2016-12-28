@@ -774,12 +774,21 @@ create_box(vector<shared_ptr<Object>>& objects) {
 
 
 void
-show_progress(cv::Mat& img, int delay = 1000)
+show_progress(cv::Mat& img, double* progressArr, int numProg, int delay = 1000)
 {
-    char key;
+    int key;
+    double progress;
     while(processing)
     {
-        cv::imshow(winName, img);
+        cv::Mat tmpimg{img.clone()};
+        progress = 0;
+        for (int n=0; n<numProg; ++n) {
+            progress += progressArr[n];
+        }
+        progress /= numProg;
+        progress *= 100;
+        cv::putText(tmpimg, to_string((int)progress) + "%", cv::Point{10, 25}, CV_FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar::all(255), 1);
+        cv::imshow(winName, tmpimg);
         key = cv::waitKey(delay);
         if ((key & 0xff) == 27) {
             cout << "... rendering canceled" << endl;
@@ -791,14 +800,14 @@ show_progress(cv::Mat& img, int delay = 1000)
 void
 render(ImageType* img, unsigned int x_start, unsigned int y_start, unsigned int cH, unsigned int cW, const unsigned int H, const unsigned int W,
        const double ASPECT_RATIO, const double FOV, const Vec3d& origin, const vector<shared_ptr<Object>>& objects,
-       const vector<Light>& lights, const Color& background) {
-    for (unsigned int y = y_start; y < cH+y_start; ++y) {
-        ImageType* img_ptr{img + 3*y*W + 3*x_start};
-        for (unsigned int x = x_start; x < cW+x_start; ++x) {
-            const unsigned int cur_px{y * W + x + 1};
-            // note: progress does not work when someone introduce line breaks
-//            cout << "pixel: " << cur_px << "/" << H * W << "\t" << (int) ((cur_px * 100.0) / (H * W)) << "%\r";
+       const vector<Light>& lights, const Color& background, double& progress) {
+    progress = 0;
+    const unsigned int sumPix{cH*cW};
+    unsigned int curPix{0};
 
+    for (unsigned int y = y_start; y < cH+y_start; ++y) {
+        ImageType* img_ptr{img + 3 * (y*W + x_start)};
+        for (unsigned int x = x_start; x < cW+x_start; ++x) {
             const double px_ndc = (x + 0.5) / W;
             const double py_ndc = (y + 0.5) / H;
             const double cam_x = (2 * px_ndc - 1) * ASPECT_RATIO * tan(deg2rad(FOV) / 2);
@@ -874,9 +883,11 @@ render(ImageType* img, unsigned int x_start, unsigned int y_start, unsigned int 
                 px_color = background;
             }
 
-            *(img_ptr++) = px_color.b * 255;
-            *(img_ptr++) = px_color.g * 255;
-            *(img_ptr++) = px_color.r * 255;
+            *(img_ptr++) = (ImageType) (px_color.b * 255);
+            *(img_ptr++) = (ImageType) (px_color.g * 255);
+            *(img_ptr++) = (ImageType) (px_color.r * 255);
+
+            progress = ((double)++curPix)/sumPix;
         }
     }
 }
@@ -907,45 +918,9 @@ colorize_image_tile(cv::Mat img, int num, int x_start, int y_start, int pW, int 
     cv::putText(tile, text, cv::Point{pW / 2 - textSize.width/2, pH / 2}, fontFace, fontScale, cv::Scalar::all(255), thickness);
 }
 
-int
-main(int argc, char** argv) {
 
-    string outFilename{"out10.ppm"};
-    if(argc > 1)
-    {
-        if (string(argv[1]) == "-o") {
-            outFilename = argv[2];
-        }
-    }
-
-
-    cout << "... start ray tracer" << endl;
-//    check_op_overloading();
-
-    // resolution has to be even
-    constexpr unsigned int H = 600;
-    constexpr unsigned int W = 800;
-    ImageType* img_ptr = new ImageType[W*H*3];
-    memset(img_ptr, 0, sizeof(ImageType)*W*H*3);
-    cv::Mat img{H, W, CV_8UC3, img_ptr};
-    cv::namedWindow(winName, CV_WINDOW_AUTOSIZE);
-
-//    constexpr unsigned int H = 250;
-//    constexpr unsigned int W = 350;
-    constexpr unsigned int MAX_VAL = 255;
-    constexpr double ASPECT_RATIO = (double) W / H;
-    constexpr double FOV = 60;
-
-//    ofstream ofs{"bunny_high_res.ppm"};    // http://netpbm.sourceforge.net/doc/ppm.html
-    ofstream ofs{outFilename};    // http://netpbm.sourceforge.net/doc/ppm.html
-    ofs << "P3\n"
-        << to_string(W) << " " << to_string(H) << "\n"
-        << to_string(MAX_VAL) << "\n";
-
-    Color background{0, 0.5, 0.5};
-
-
-    vector<shared_ptr<Object>> objects;
+void
+create_scene(vector<shared_ptr<Object>>& objects, vector<Light>& lights) {
     objects.push_back(make_shared<Sphere>(Vec3d{0, 0, -10}, 1, Material(Color::red(), 0.1, 0.2, 0.7)));
 //    objects.push_back(make_shared<Sphere>(Vec{10,0,-20}, 5, scolor));
     objects.push_back(make_shared<Sphere>(Vec3d{1.75, -1.5, -9}, 0.3, Color{1, 1, 0}));
@@ -957,7 +932,7 @@ main(int argc, char** argv) {
     const string root{"/home/chris/shared/github/chris/raytracer/data/3d_meshes/bunny/reconstruction/"};
     string bunny_res4_path{root+"bun_zipper_res4.ply"};
     string bunny_path{root+"bun_zipper.ply"};
-    shared_ptr<Model> bunny{Model::load_ply(bunny_path)};
+    shared_ptr<Model> bunny{Model::load_ply(bunny_res4_path)};
     bunny->scale(15);
     bunny->translate(Vec3d{-2, -4, -7.5});
     objects.push_back(bunny);
@@ -978,40 +953,71 @@ main(int argc, char** argv) {
     objects.push_back(make_shared<Plane>(0, -1, 0, box_len, wall_color));
 
 //    s.radius = 10;
-
-    const Vec3d origin{0, 0, 0};  // center of projection
-
-    vector<Light> lights;
     lights.emplace_back(Light{Vec3d{0, 3, -7.5}, Color::white() * 20});
 //    lights.emplace_back(Light{Vec3d{0, 8, -9}, Color::white()*0.5});
     lights.emplace_back(Light{Vec3d{-1, -1, -1}, Color::white() * 7});
 //    lights.emplace_back(Light{Vec3d{5, -5, -2}, Color::white()*0.5});
 //    lights.emplace_back(Light{Vec{-30,-20,1}});
+}
 
+int
+main(int argc, char** argv) {
+    string outFilename{"raytracer.png"};
+    if(argc > 1)
+    {
+        if (string(argv[1]) == "-o") {
+            outFilename = argv[2];
+        }
+    }
 
-    // 7 threads
-    const int num_threads{7};   // max: num available threads - 1
-    thread threads[num_threads];
+    cout << "... start ray tracer" << endl;
+    cout << "... write to file: " << outFilename << endl;
+//    check_op_overloading();
 
-    // split image into parts (2x4)
-    const unsigned int nXParts{2};
-    const unsigned int nYParts{4};
-    const unsigned int pW{W/nXParts};
-    const unsigned int pH{H/nYParts};
-    const unsigned int im_stride{W};
+    // resolution has to be even
+    constexpr unsigned int H = 600;
+    constexpr unsigned int W = 800;
+    ImageType* img_ptr = new ImageType[W*H*3];
+    memset(img_ptr, 0, sizeof(ImageType)*W*H*3);
+    cv::Mat img{H, W, CV_8UC3, img_ptr};
+    cv::namedWindow(winName, CV_WINDOW_AUTOSIZE);
 
-    thread thread_show{show_progress, std::ref(img), 50};
+//    constexpr unsigned int H = 250;
+//    constexpr unsigned int W = 350;
+    constexpr unsigned int MAX_VAL = 255;
+    constexpr double ASPECT_RATIO = (double) W / H;
+    constexpr double FOV = 60;
+
+    Color background{0, 0.5, 0.5};
+
+    vector<shared_ptr<Object>> objects;
+    vector<Light> lights;
+    create_scene(objects, lights);
+
+    const Vec3d origin{0, 0, 0};  // center of projection
+
+    // 8 threads (7 child threads + 1 main thread)
+    const int num_threads{8};   // max: num available threads
+    double progress[num_threads];
+    thread threads[num_threads-1];
+
+    // split image into tiles (2x4)
+    const unsigned int nXTiles{2};
+    const unsigned int nYTiles{4};
+    const unsigned int pW{W/nXTiles};
+    const unsigned int pH{H/nYTiles};
+
+    // starting thread to show progress
+    thread thread_show{show_progress, std::ref(img), progress, num_threads, 100};
 
     // start threads
     unsigned int x_start{0};
     unsigned int y_start{0};
     unsigned int ctr{0};
-//    cout << "pW: " << pW << " pH: " << pH << endl;
-    for (unsigned int n=0; n<num_threads; ++n) {
-//        cout << "thread: " << n << ", x_start: " << x_start << ", y_start: " << y_start << endl;
-
+    for (unsigned int n=0; n<num_threads-1; ++n) {
+        cout << "... starting thread " << n << endl;
         threads[n] = thread{render, img_ptr, x_start, y_start, pH, pW, H, W, ASPECT_RATIO, FOV, origin, objects,
-         lights, background};
+         lights, background, std::ref(progress[ctr])};
         colorize_image_tile(img, ctr++, x_start, y_start, pW, pH);
         x_start += pW;
         if (x_start >= W) {
@@ -1021,25 +1027,19 @@ main(int argc, char** argv) {
     }
 
     // main thread does the rest
-    colorize_image_tile(img, ctr++, x_start, y_start, pW, pH);
-    render(img_ptr, x_start, y_start, pH, pW, H, W, ASPECT_RATIO, FOV, origin, objects, lights, background);
+    colorize_image_tile(img, ctr, x_start, y_start, pW, pH);
+    render(img_ptr, x_start, y_start, pH, pW, H, W, ASPECT_RATIO, FOV, origin, objects, lights, background, progress[ctr]);
 
     // wait for other threads to finish
-    for (unsigned int n=0; n<num_threads; ++n) {
+    for (unsigned int n=0; n<num_threads-1; ++n) {
+        cout << "... waiting for thread " << n << endl;
         if (threads[n].joinable())
             threads[n].join();
     }
 
     processing = false;
-
-
-//    // write image to file
-//    img_ptr = img;
-//    for (unsigned int i = 0; i < W * H; ++i) {
-//        Color c = *(img_ptr++) * MAX_VAL;
-//        c.round();
-//        ofs << c;
-//    }
+    if (thread_show.joinable())
+        thread_show.join();
 
     cv::imshow(winName, img);
     cv::imwrite(outFilename, img);
