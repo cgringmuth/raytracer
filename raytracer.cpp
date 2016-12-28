@@ -881,6 +881,32 @@ render(ImageType* img, unsigned int x_start, unsigned int y_start, unsigned int 
     }
 }
 
+void
+colorize_image_tile(cv::Mat img, int num, int x_start, int y_start, int pW, int pH)
+{
+    int baseline = 0;
+    const int fontFace = CV_FONT_HERSHEY_SIMPLEX;
+    const double fontScale = 1;
+    const int thickness = 2;
+    const string text{"thread "+to_string(num)};
+    const cv::Scalar bgColors[] = {cv::Scalar{0, 0, 255},
+                                   cv::Scalar{0, 255, 0},
+                                   cv::Scalar{255, 0, 0},
+                                   cv::Scalar{255, 255, 0},
+                                   cv::Scalar{255, 0, 255},
+                                   cv::Scalar{125, 125, 125},
+                                   cv::Scalar{0, 125, 255},
+                                   cv::Scalar{125, 255, 0},
+                                   cv::Scalar{255, 125, 0},
+                                   cv::Scalar{255, 255, 125},
+                                   cv::Scalar{255, 125, 255}};
+    // color each part differently
+    cv::Mat tile{img(cv::Rect{x_start, y_start, pW, pH})};
+    tile = bgColors[num]*0.2;
+    cv::Size textSize = cv::getTextSize(text, fontFace, fontScale, thickness, &baseline);
+    cv::putText(tile, text, cv::Point{pW / 2 - textSize.width/2, pH / 2}, fontFace, fontScale, cv::Scalar::all(255), thickness);
+}
+
 int
 main(int argc, char** argv) {
 
@@ -979,13 +1005,14 @@ main(int argc, char** argv) {
     // start threads
     unsigned int x_start{0};
     unsigned int y_start{0};
+    unsigned int ctr{0};
 //    cout << "pW: " << pW << " pH: " << pH << endl;
     for (unsigned int n=0; n<num_threads; ++n) {
 //        cout << "thread: " << n << ", x_start: " << x_start << ", y_start: " << y_start << endl;
 
         threads[n] = thread{render, img_ptr, x_start, y_start, pH, pW, H, W, ASPECT_RATIO, FOV, origin, objects,
          lights, background};
-
+        colorize_image_tile(img, ctr++, x_start, y_start, pW, pH);
         x_start += pW;
         if (x_start >= W) {
             x_start = 0;
@@ -994,6 +1021,7 @@ main(int argc, char** argv) {
     }
 
     // main thread does the rest
+    colorize_image_tile(img, ctr++, x_start, y_start, pW, pH);
     render(img_ptr, x_start, y_start, pH, pW, H, W, ASPECT_RATIO, FOV, origin, objects, lights, background);
 
     // wait for other threads to finish
