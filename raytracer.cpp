@@ -9,6 +9,7 @@
 #include <iomanip>
 #include <thread>
 
+#include <opencv2/opencv.hpp>
 
 // url: https://www.scratchapixel.com/lessons/3d-basic-rendering/introduction-to-ray-tracing
 // operator overloading: http://stackoverflow.com/a/4421719/1959528
@@ -28,6 +29,11 @@
 
 
 using namespace std;
+
+
+bool processing{true};
+const string winName{"frame"};
+typedef unsigned char ImageType;
 
 /** 3D vector in cartesian space.
  *
@@ -300,7 +306,8 @@ struct Material {
     double ks;  // specular reflectance
     double specRefExp; // specular-reflection exponent
 
-    Material(const Color& color) : color(color), ka{0.15}, kd{0.7}, ks{3}, specRefExp{8} {}
+    Material(const Color& color, double ka=0.15, double kd=0.7, double ks=0.3, double specRefExp=8)
+            : color(color), ka(ka), kd(kd), ks(ks), specRefExp(specRefExp) {}
 
     Material() : color{} {}
 };
@@ -313,7 +320,7 @@ struct Object {
     Material material;
 
     Object(const Color& color) : material(color) {}
-
+    Object(const Material& material) : material(material) {}
     Object() : material{} {}
 
     virtual bool intersect(const Ray& ray, double& dist, Vec3d& normal) const = 0;
@@ -582,6 +589,7 @@ struct Sphere : public Object {
     double radius;
 
     Sphere(const Vec3d& c, double r, const Color& color) : center{c}, radius{r}, Object{color} {}
+    Sphere(const Vec3d& c, double r, const Material& material) : center{c}, radius{r}, Object{material} {}
 
     // get intersection with ray: refer: https://en.wikipedia.org/wiki/Line%E2%80%93sphere_intersection
     // more details: https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rendering-simple-shapes/ray-sphere-intersection
@@ -766,11 +774,26 @@ create_box(vector<shared_ptr<Object>>& objects) {
 
 
 void
-render(Color* img, unsigned int x_start, unsigned int y_start, unsigned int cH, unsigned int cW, const unsigned int H, const unsigned int W,
+show_progress(cv::Mat& img, int delay = 1000)
+{
+    char key;
+    while(processing)
+    {
+        cv::imshow(winName, img);
+        key = cv::waitKey(delay);
+        if ((key & 0xff) == 27) {
+            cout << "... rendering canceled" << endl;
+            exit(0);
+        }
+    }
+}
+
+void
+render(ImageType* img, unsigned int x_start, unsigned int y_start, unsigned int cH, unsigned int cW, const unsigned int H, const unsigned int W,
        const double ASPECT_RATIO, const double FOV, const Vec3d& origin, const vector<shared_ptr<Object>>& objects,
        const vector<Light>& lights, const Color& background) {
     for (unsigned int y = y_start; y < cH+y_start; ++y) {
-        Color* img_ptr{img + y*W + x_start};
+        ImageType* img_ptr{img + 3*y*W + 3*x_start};
         for (unsigned int x = x_start; x < cW+x_start; ++x) {
             const unsigned int cur_px{y * W + x + 1};
             // note: progress does not work when someone introduce line breaks
@@ -851,11 +874,12 @@ render(Color* img, unsigned int x_start, unsigned int y_start, unsigned int cH, 
                 px_color = background;
             }
 
-            *(img_ptr++) = px_color;
+            *(img_ptr++) = px_color.b * 255;
+            *(img_ptr++) = px_color.g * 255;
+            *(img_ptr++) = px_color.r * 255;
         }
     }
 }
-
 
 int
 main(int argc, char** argv) {
@@ -875,6 +899,11 @@ main(int argc, char** argv) {
     // resolution has to be even
     constexpr unsigned int H = 600;
     constexpr unsigned int W = 800;
+    ImageType* img_ptr = new ImageType[W*H*3];
+    memset(img_ptr, 0, sizeof(ImageType)*W*H*3);
+    cv::Mat img{H, W, CV_8UC3, img_ptr};
+    cv::namedWindow(winName, CV_WINDOW_AUTOSIZE);
+
 //    constexpr unsigned int H = 250;
 //    constexpr unsigned int W = 350;
     constexpr unsigned int MAX_VAL = 255;
@@ -891,11 +920,7 @@ main(int argc, char** argv) {
 
 
     vector<shared_ptr<Object>> objects;
-    shared_ptr<Sphere> s = make_shared<Sphere>(Vec3d{0, 0, -10}, 1, Color::red());
-    s->material.ks = 0.7;
-    s->material.kd = 0.2;
-    s->material.ka = 0.1;
-    objects.push_back(s);
+    objects.push_back(make_shared<Sphere>(Vec3d{0, 0, -10}, 1, Material(Color::red(), 0.1, 0.2, 0.7)));
 //    objects.push_back(make_shared<Sphere>(Vec{10,0,-20}, 5, scolor));
     objects.push_back(make_shared<Sphere>(Vec3d{1.75, -1.5, -9}, 0.3, Color{1, 1, 0}));
     objects.push_back(make_shared<Sphere>(Vec3d{-1, -1, -7}, 0.5, Color::blue()));
@@ -903,10 +928,10 @@ main(int argc, char** argv) {
     objects.push_back(make_shared<Sphere>(Vec3d{-3, 2, -7}, 1, Color{1, 0, 1}));
 
     create_box(objects);
-    string root{"/home/chris/shared/github/chris/raytracer/data/3d_meshes/bunny/reconstruction/"};
+    const string root{"/home/chris/shared/github/chris/raytracer/data/3d_meshes/bunny/reconstruction/"};
     string bunny_res4_path{root+"bun_zipper_res4.ply"};
     string bunny_path{root+"bun_zipper.ply"};
-    shared_ptr<Model> bunny{Model::load_ply(bunny_res4_path)};
+    shared_ptr<Model> bunny{Model::load_ply(bunny_path)};
     bunny->scale(15);
     bunny->translate(Vec3d{-2, -4, -7.5});
     objects.push_back(bunny);
@@ -928,9 +953,6 @@ main(int argc, char** argv) {
 
 //    s.radius = 10;
 
-    Color* img = new Color[W * H];
-    double* zbuff = new double[W * H];
-    Color* img_ptr = img;
     const Vec3d origin{0, 0, 0};  // center of projection
 
     vector<Light> lights;
@@ -952,6 +974,8 @@ main(int argc, char** argv) {
     const unsigned int pH{H/nYParts};
     const unsigned int im_stride{W};
 
+    thread thread_show{show_progress, std::ref(img), 50};
+
     // start threads
     unsigned int x_start{0};
     unsigned int y_start{0};
@@ -959,7 +983,7 @@ main(int argc, char** argv) {
     for (unsigned int n=0; n<num_threads; ++n) {
 //        cout << "thread: " << n << ", x_start: " << x_start << ", y_start: " << y_start << endl;
 
-        threads[n] = thread{render, img, x_start, y_start, pH, pW, H, W, ASPECT_RATIO, FOV, origin, objects,
+        threads[n] = thread{render, img_ptr, x_start, y_start, pH, pW, H, W, ASPECT_RATIO, FOV, origin, objects,
          lights, background};
 
         x_start += pW;
@@ -970,7 +994,7 @@ main(int argc, char** argv) {
     }
 
     // main thread does the rest
-    render(img, x_start, y_start, pH, pW, H, W, ASPECT_RATIO, FOV, origin, objects, lights, background);
+    render(img_ptr, x_start, y_start, pH, pW, H, W, ASPECT_RATIO, FOV, origin, objects, lights, background);
 
     // wait for other threads to finish
     for (unsigned int n=0; n<num_threads; ++n) {
@@ -978,17 +1002,19 @@ main(int argc, char** argv) {
             threads[n].join();
     }
 
+    processing = false;
 
 
-    // write image to file
-    img_ptr = img;
-    for (unsigned int i = 0; i < W * H; ++i) {
-        Color c = *(img_ptr++) * MAX_VAL;
-        c.round();
-        ofs << c;
-    }
+//    // write image to file
+//    img_ptr = img;
+//    for (unsigned int i = 0; i < W * H; ++i) {
+//        Color c = *(img_ptr++) * MAX_VAL;
+//        c.round();
+//        ofs << c;
+//    }
 
-
-    delete[] img;
-    delete[] zbuff;
+    cv::imshow(winName, img);
+    cv::imwrite(outFilename, img);
+    cv::waitKey();
+    delete[] img_ptr;
 }
