@@ -1058,7 +1058,6 @@ main(int argc, char** argv) {
     // main thread does the rest
     colorize_image_tile(img, ctr, x_start, y_start, pW, pH);
     render(img_ptr, x_start, y_start, pH, pW, H, W, ASPECT_RATIO, FOV, origin, objects, lights, background, progress[ctr]);
-    processing = false;
 
     // wait for other threads to finish
     for (unsigned int n=0; n<num_threads-1; ++n) {
@@ -1066,10 +1065,12 @@ main(int argc, char** argv) {
         if (threads[n].joinable())
             threads[n].join();
     }
+    processing = false;
     if (thread_show.joinable())
         thread_show.join();
 
     cv::imshow(winName, img);
+    cout << "... write image " << outFilename << endl;
     cv::imwrite(outFilename, img);
     cv::waitKey();
     delete[] img_ptr;
