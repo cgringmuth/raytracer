@@ -33,7 +33,7 @@ using namespace std;
 
 
 bool processing{true};
-const string winName{"frame"};
+const string winName{"image"};
 typedef unsigned char ImageType;
 
 /** 3D vector in cartesian space.
@@ -790,23 +790,24 @@ preview(cv::Mat& img, double* progressArr, int numProg, int delay = 1000)
         progress *= 100;
 
         const string text{to_string((int)progress) + "%"};
-        const int fontFace = CV_FONT_HERSHEY_SIMPLEX;
-        double fontScale = 0.7;
-        const cv::Scalar color{cv::Scalar::all(255)};
-        const int thickness = 1;
+        const int fontFace{CV_FONT_HERSHEY_SIMPLEX};
+        const double fontScale{1};
+        const cv::Scalar color{cv::Scalar{0,255,0}};
+        const int thickness{1};
         int baseLine{0};
-        const cv::Size textSize{cv::getTextSize(text, fontFace, fontScale, thickness, &baseLine)};
+        const cv::Size textSize{cv::getTextSize(text, fontFace, fontScale, thickness+2, &baseLine)};
         const int x{10};
         const int y{10};
-        const int border{8};
+        const int border{12};
         const double alpha{0.2};
 
         // draw box;
         cv::Rect roi{x, y, textSize.width+border, textSize.height+border};
         cv::Mat foo{roi.height, roi.width, tmpimg.type(), cv::Scalar::all(130)};
         cv::Mat cropped{tmpimg(roi)};
-        cv::putText(foo, text, cv::Point{border/2, textSize.height+border/2}, fontFace, fontScale, color, thickness);
+        cv::putText(foo, text, cv::Point{border/2, textSize.height+border/2-2}, fontFace, fontScale, color, thickness+2);
         cv::addWeighted(cropped, alpha, foo, 1-alpha, 0, cropped);
+        cv::putText(cropped, text, cv::Point{border/2, textSize.height+border/2-2}, fontFace, fontScale, color*0.5, thickness);
 
         cv::imshow(winName, tmpimg);
         key = cv::waitKey(delay);
@@ -952,14 +953,14 @@ create_scene(vector<shared_ptr<Object>>& objects, vector<Light>& lights) {
     const string mesh_root{"/home/chris/shared/github/chris/raytracer/data/3d_meshes/"};
     string bunny_res4_path{mesh_root+"bunny/reconstruction/bun_zipper_res4.ply"};
     string bunny_path{mesh_root+"bunny/reconstruction/bun_zipper.ply"};
-    shared_ptr<Model> bunny{Model::load_ply(bunny_path)};
+    shared_ptr<Model> bunny{Model::load_ply(bunny_res4_path)};
     bunny->scale(15);
     bunny->translate(Vec3d{-2, -4, -7.5});
     objects.push_back(bunny);
 
     string buddha_res4_path{mesh_root+"happy_recon/happy_vrip_res4.ply"};
     string buddha_path{mesh_root+"happy_recon/happy_vrip.ply"};
-    shared_ptr<Model> buddha{Model::load_ply(buddha_path)};
+    shared_ptr<Model> buddha{Model::load_ply(buddha_res4_path)};
     buddha->scale(15);
     buddha->translate(Vec3d{2, -4, -7.5});
     buddha->material.ks = 0.9;
@@ -1003,7 +1004,7 @@ main(int argc, char** argv) {
 //    check_op_overloading();
 
     // resolution has to be even
-    constexpr unsigned int downScale{1};
+    constexpr unsigned int downScale{2};
     constexpr unsigned int H{600/downScale};
     constexpr unsigned int W{800/downScale};
     ImageType* img_ptr = new ImageType[W*H*3];
