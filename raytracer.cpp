@@ -953,14 +953,14 @@ create_scene(vector<shared_ptr<Object>>& objects, vector<Light>& lights) {
     const string mesh_root{"/home/chris/shared/github/chris/raytracer/data/3d_meshes/"};
     string bunny_res4_path{mesh_root+"bunny/reconstruction/bun_zipper_res4.ply"};
     string bunny_path{mesh_root+"bunny/reconstruction/bun_zipper.ply"};
-    shared_ptr<Model> bunny{Model::load_ply(bunny_res4_path)};
+    shared_ptr<Model> bunny{Model::load_ply(bunny_path)};
     bunny->scale(15);
     bunny->translate(Vec3d{-2, -4, -7.5});
     objects.push_back(bunny);
 
     string buddha_res4_path{mesh_root+"happy_recon/happy_vrip_res4.ply"};
     string buddha_path{mesh_root+"happy_recon/happy_vrip.ply"};
-    shared_ptr<Model> buddha{Model::load_ply(buddha_res4_path)};
+    shared_ptr<Model> buddha{Model::load_ply(buddha_path)};
     buddha->scale(15);
     buddha->translate(Vec3d{2, -4, -7.5});
     buddha->material.ks = 0.9;
@@ -1004,7 +1004,7 @@ main(int argc, char** argv) {
 //    check_op_overloading();
 
     // resolution has to be even
-    constexpr unsigned int downScale{2};
+    constexpr unsigned int downScale{1};
     constexpr unsigned int H{600/downScale};
     constexpr unsigned int W{800/downScale};
     ImageType* img_ptr = new ImageType[W*H*3];
