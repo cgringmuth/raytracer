@@ -22,9 +22,9 @@
 /**
  * TODOs
  *
- * - Add material with different reflection models (diffuse, specular, refraction etc.)
- * - Implement ply file loading -> very first draft implemented
- * - Loading scene from file (xml, YAML etc.) -> I would prefer yaml
+ * - todo: Add material with different reflection models (diffuse, specular, refraction etc.)
+ * - todo: Implement ply file loading -> very first draft implemented
+ * - todo: Loading scene from file (xml, YAML etc.) -> I would prefer yaml
  *
  */
 
@@ -56,6 +56,7 @@ bool processing{true};
 const string winName{"image"};
 typedef unsigned char ImageType;
 Timer timer;
+constexpr double EPS{0.000001};
 
 
 /** 3D vector in cartesian space.
@@ -368,11 +369,10 @@ struct Plane : public Object {
 
     bool intersect(const Ray& ray, double& dist, Vec3d& normal) const override {
         //src: https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/ray-triangle-intersection-geometric-solution
-        const double eps{0.00001};
         normal = Vec3d{a, b, c};
         const double vd{normal.dotProduct(ray.direction)};
 
-        if (abs(vd) < eps)  // check if vd is 0 -> plane and ray parallel
+        if (abs(vd) < EPS)  // check if vd is 0 -> plane and ray parallel
             false;
         if (vd > 0)     // normal of plane is pointing away from camera (maybe handle differently)
             false;
@@ -380,7 +380,7 @@ struct Plane : public Object {
         const double vo{normal.dotProduct(ray.origin) + d};
         dist = -vo / vd;
 
-        return dist > eps;
+        return dist > EPS;
     }
 
     Vec3d getNormal(const Vec3d& vec) const override {
@@ -398,7 +398,7 @@ struct Triangle : public Object {
             : v0{v0}, v1{v1}, v2{v2} {}
 
     virtual bool intersect(const Ray& ray, double& dist, Vec3d& normal) const override {
-        const double eps{0.00001};
+        // todo: improve performance (http://www.cs.virginia.edu/%7Egfx/Courses/2003/ImageSynthesis/papers/Acceleration/Fast%20MinimumStorage%20RayTriangle%20Intersection.pdf)
         normal = getNormal(v0);
 //        cout << normal << endl;
 //        cout << "v0: " << v0 << "v1: " << v1 << "v2: " << v2 << endl;
@@ -439,7 +439,7 @@ struct Triangle : public Object {
 
 //        cout << "dist: " << eps << endl;
 
-        return dist > eps;
+        return dist > EPS;
     }
 
     virtual Vec3d getNormal(const Vec3d& vec) const override {
@@ -564,7 +564,6 @@ struct Model : Object {
         Vec3d tmpnormal;
         dist = std::numeric_limits<double>::max();
         bool hit{false};
-        const double eps{0.00001};
         for (const auto& f : faces) {
             if (f.intersect(ray, tmpdist, tmpnormal) && tmpdist < dist) {
                 dist = tmpdist;
@@ -572,7 +571,7 @@ struct Model : Object {
                 hit = true;
             }
         }
-        return hit && dist > eps;
+        return hit && dist > EPS;
     }
 
     Model& scale(double s) {
@@ -611,7 +610,6 @@ struct Sphere : public Object {
     // more details: https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rendering-simple-shapes/ray-sphere-intersection
     virtual bool
     intersect(const Ray& ray, double& dist, Vec3d& normal) const override {
-        constexpr double eps = 0.00001;
         // (l * (o - c))^2 - || o - c ||^2 + r^2
         double val1, val2, val3, dist1, dist2;
         const Vec3d temp{ray.origin - center};
@@ -634,7 +632,7 @@ struct Sphere : public Object {
         }
         normal = getNormal(ray.getPoint(dist));
 
-        return dist > eps;      //  neg. dist are behind ray; eps is for not hitting itself
+        return dist > EPS;      //  neg. dist are behind ray; eps is for not hitting itself
     }
 
     virtual Vec3d
@@ -976,14 +974,14 @@ create_scene(vector<shared_ptr<Object>>& objects, vector<Light>& lights) {
     const string mesh_root{"/home/chris/shared/github/chris/raytracer/data/3d_meshes/"};
     string bunny_res4_path{mesh_root+"bunny/reconstruction/bun_zipper_res4.ply"};
     string bunny_path{mesh_root+"bunny/reconstruction/bun_zipper.ply"};
-    shared_ptr<Model> bunny{Model::load_ply(bunny_path)};
+    shared_ptr<Model> bunny{Model::load_ply(bunny_res4_path)};
     bunny->scale(15);
     bunny->translate(Vec3d{-2, -4, -7.5});
     objects.push_back(bunny);
 
     string buddha_res4_path{mesh_root+"happy_recon/happy_vrip_res4.ply"};
     string buddha_path{mesh_root+"happy_recon/happy_vrip.ply"};
-    shared_ptr<Model> buddha{Model::load_ply(buddha_path)};
+    shared_ptr<Model> buddha{Model::load_ply(buddha_res4_path)};
     buddha->scale(15);
     buddha->translate(Vec3d{2, -4, -7.5});
     buddha->material.ks = 0.9;
