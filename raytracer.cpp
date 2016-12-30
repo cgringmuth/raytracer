@@ -28,7 +28,7 @@
  *
  */
 
-
+#define MT_TRIANGLE_INTERSECT   1
 
 
 using namespace std;
@@ -399,7 +399,39 @@ struct Triangle : public Object {
 
     virtual bool intersect(const Ray& ray, double& dist, Vec3d& normal) const override {
         // todo: improve performance (http://www.cs.virginia.edu/%7Egfx/Courses/2003/ImageSynthesis/papers/Acceleration/Fast%20MinimumStorage%20RayTriangle%20Intersection.pdf)
-        normal = getNormal(v0);
+        normal = this->normal;
+#if MT_TRIANGLE_INTERSECT==1
+        // assuming each point in triangle can be described by (uv-space)
+        // P = v0 + u(v1-v0) + v(v2-v0)
+        // P can also be described by ray equation (when hit triangle)
+        // P = o + td
+        // Note: u and v can be used for texture mapping and normal interpolation
+        const Vec3d v0v1{v1-v0};    // edge 1 from v0 to v1
+        const Vec3d v0v2{v2-v0};    // edge 2 from v0 to v2
+        const Vec3d pVec{ray.direction.cross_product(v0v2)};
+        const double det{pVec.dotProduct(v0v1)};
+
+        // if determinant is negative triangle is backfacing
+        // if determinant is close to 0 ray is missing triangle
+        if (det < EPS)
+            return false;
+        const double invDet = 1 / det;
+
+        // calc u
+        const Vec3d tVec{ray.origin-v0};
+        const double u{invDet * pVec.dotProduct(tVec)};
+        if (u < 0 || u > 1)
+            return false;
+
+        // calc v
+        const Vec3d qVec{tVec.cross_product(v0v1)};
+        const double v{invDet * qVec.dotProduct(ray.direction)};
+        if (v < 0 || u+v > 1)
+            return false;
+
+        // calc dist
+        dist = invDet * qVec.dotProduct(v0v2);
+#else
 //        cout << normal << endl;
 //        cout << "v0: " << v0 << "v1: " << v1 << "v2: " << v2 << endl;
         Plane plane{normal,
@@ -416,6 +448,8 @@ struct Triangle : public Object {
 //        cout << "hit: " << hit << " hit length:" << hit.length() << endl;
 
         // do the "inside-outside" test
+        // check if intersection point is on left side of each edge
+
         const Vec3d edge0{v1 - v0};
         const Vec3d vp0{hit - v0};
 //        cout << "edge0: " << edge0 << " vp0: " << vp0 << endl;
@@ -439,6 +473,7 @@ struct Triangle : public Object {
 
 //        cout << "dist: " << eps << endl;
 
+#endif
         return dist > EPS;
     }
 
@@ -978,14 +1013,14 @@ create_scene(vector<shared_ptr<Object>>& objects, vector<Light>& lights) {
     const string mesh_root{"/home/chris/shared/github/chris/raytracer/data/3d_meshes/"};
     string bunny_res4_path{mesh_root+"bunny/reconstruction/bun_zipper_res4.ply"};
     string bunny_path{mesh_root+"bunny/reconstruction/bun_zipper.ply"};
-    shared_ptr<Model> bunny{Model::load_ply(bunny_res4_path)};
+    shared_ptr<Model> bunny{Model::load_ply(bunny_path)};
     bunny->scale(15);
     bunny->translate(Vec3d{-2, -4, -7.5});
     objects.push_back(bunny);
 
     string buddha_res4_path{mesh_root+"happy_recon/happy_vrip_res4.ply"};
     string buddha_path{mesh_root+"happy_recon/happy_vrip.ply"};
-    shared_ptr<Model> buddha{Model::load_ply(buddha_res4_path)};
+    shared_ptr<Model> buddha{Model::load_ply(buddha_path)};
     buddha->scale(15);
     buddha->translate(Vec3d{2, -4, -7.5});
     buddha->material.ks = 0.9;
@@ -1025,6 +1060,9 @@ main(int argc, char** argv) {
     }
 
     cout << "... start ray tracer" << endl;
+#if MT_TRIANGLE_INTERSECT == 1
+    cout << "... using Moeller-Trumbore algorithm for triangle intersection calculation" << endl;
+#endif
     cout << "... write to file: " << outFilename << endl;
 //    check_op_overloading();
 
