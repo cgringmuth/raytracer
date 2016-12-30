@@ -355,9 +355,9 @@ struct Plane : public Object {
         // normalize normal vector
         Vec3d pn{a, b, c};
         pn.normalize();
-        a = pn[0];
-        b = pn[1];
-        c = pn[2];
+        this->a = pn[0];
+        this->b = pn[1];
+        this->c = pn[2];
     }
 
     Plane(Vec3d normal, double dist, const Color& color) : d{dist}, Object{color} {
@@ -493,6 +493,7 @@ struct Model : Object {
     Model() {}
 
     static shared_ptr<Model> load_ply(const string& fname) {
+        cout << "... loading model: " << fname << endl;
         shared_ptr<Model> model{make_shared<Model>()};
         Color color{Color::white()};
 
@@ -977,14 +978,14 @@ create_scene(vector<shared_ptr<Object>>& objects, vector<Light>& lights) {
     const string mesh_root{"/home/chris/shared/github/chris/raytracer/data/3d_meshes/"};
     string bunny_res4_path{mesh_root+"bunny/reconstruction/bun_zipper_res4.ply"};
     string bunny_path{mesh_root+"bunny/reconstruction/bun_zipper.ply"};
-    shared_ptr<Model> bunny{Model::load_ply(bunny_path)};
+    shared_ptr<Model> bunny{Model::load_ply(bunny_res4_path)};
     bunny->scale(15);
     bunny->translate(Vec3d{-2, -4, -7.5});
     objects.push_back(bunny);
 
     string buddha_res4_path{mesh_root+"happy_recon/happy_vrip_res4.ply"};
     string buddha_path{mesh_root+"happy_recon/happy_vrip.ply"};
-    shared_ptr<Model> buddha{Model::load_ply(buddha_path)};
+    shared_ptr<Model> buddha{Model::load_ply(buddha_res4_path)};
     buddha->scale(15);
     buddha->translate(Vec3d{2, -4, -7.5});
     buddha->material.ks = 0.9;
