@@ -9,6 +9,7 @@
 #include <iomanip>
 #include <thread>
 #include <exception>
+#include <chrono>
 
 #include <opencv2/opencv.hpp>
 
@@ -23,6 +24,7 @@
  *
  * - Add material with different reflection models (diffuse, specular, refraction etc.)
  * - Implement ply file loading -> very first draft implemented
+ * - Loading scene from file (xml, YAML etc.) -> I would prefer yaml
  *
  */
 
@@ -32,9 +34,29 @@
 using namespace std;
 
 
+
+
+
+class Timer
+{
+public:
+    Timer() : beg_(clock_::now()) {}
+    void reset() { beg_ = clock_::now(); }
+    double elapsed() const {
+        return std::chrono::duration_cast<second_>
+                (clock_::now() - beg_).count(); }
+
+private:
+    typedef std::chrono::high_resolution_clock clock_;
+    typedef std::chrono::duration<double, std::ratio<1> > second_;
+    std::chrono::time_point<clock_> beg_;
+};
+
 bool processing{true};
 const string winName{"image"};
 typedef unsigned char ImageType;
+Timer timer;
+
 
 /** 3D vector in cartesian space.
  *
@@ -214,13 +236,6 @@ struct Color {
         r += rhs.r;
         g += rhs.g;
         b += rhs.b;
-        return *this;
-    }
-
-    Color& mult(double d) {
-        r *= d;
-        g *= d;
-        b *= d;
         return *this;
     }
 
@@ -775,23 +790,31 @@ create_box(vector<shared_ptr<Object>>& objects) {
 
 
 void
-preview(cv::Mat& img, double* progressArr, int numProg, int delay = 1000)
+preview(cv::Mat& img, unsigned int* finPixArr, unsigned int* sumPixArr, int numProg, int delay = 1000)
 {
     int key;
-    double progress;
+    double progress, curElapsed, lastElapsed;
+    unsigned int curFinPix{0}, lastFinPix{0};
     while(processing)
     {
         cv::Mat tmpimg{img.clone()};
         progress = 0;
+        curFinPix = 0;
         for (int n=0; n<numProg; ++n) {
-            progress += progressArr[n];
+            curFinPix += finPixArr[n];
+            progress += (double)(finPixArr[n])/sumPixArr[n];
         }
         progress /= numProg;
         progress *= 100;
 
-        const string text{to_string((int)progress) + "%"};
+        curElapsed = timer.elapsed();
+        const double pixPerSec{((double)(curFinPix - lastFinPix))/(curElapsed - lastElapsed)};
+        lastElapsed = curElapsed;
+        lastFinPix = curFinPix;
+        const string text{to_string((unsigned int)progress) + "%; t: " + to_string((unsigned int)curElapsed)
+                          + " s; " + to_string((unsigned int) pixPerSec) + " pix/s"};
         const int fontFace{CV_FONT_HERSHEY_SIMPLEX};
-        const double fontScale{1};
+        const double fontScale{0.8};
         const cv::Scalar color{cv::Scalar{0,255,0}};
         const int thickness{1};
         int baseLine{0};
@@ -821,10 +844,9 @@ preview(cv::Mat& img, double* progressArr, int numProg, int delay = 1000)
 void
 render(ImageType* img, unsigned int x_start, unsigned int y_start, unsigned int cH, unsigned int cW, const unsigned int H, const unsigned int W,
        const double ASPECT_RATIO, const double FOV, const Vec3d& origin, const vector<shared_ptr<Object>>& objects,
-       const vector<Light>& lights, const Color& background, double& progress) {
-    progress = 0;
-    const unsigned int sumPix{cH*cW};
-    unsigned int curPix{0};
+       const vector<Light>& lights, const Color& background, unsigned int& finPix, unsigned int& sumPix) {
+    sumPix = cH*cW;
+    finPix = 0;
 
     for (unsigned int y = y_start; y < cH+y_start; ++y) {
         ImageType* img_ptr{img + 3 * (y*W + x_start)};
@@ -904,11 +926,12 @@ render(ImageType* img, unsigned int x_start, unsigned int y_start, unsigned int 
                 px_color = background;
             }
 
+            // Using Opencv bgr
             *(img_ptr++) = (ImageType) (px_color.b * 255);
             *(img_ptr++) = (ImageType) (px_color.g * 255);
             *(img_ptr++) = (ImageType) (px_color.r * 255);
 
-            progress = ((double)++curPix)/sumPix;
+            ++finPix;
         }
     }
 }
@@ -1028,7 +1051,9 @@ main(int argc, char** argv) {
 
     // 8 threads (7 child threads + 1 main thread)
     const int num_threads{8};   // max: num available threads
-    double progress[num_threads];
+    unsigned int finPix[num_threads];
+    unsigned int sumPix[num_threads];
+
     thread threads[num_threads-1];
 
     // split image into tiles (2x4)
@@ -1038,7 +1063,8 @@ main(int argc, char** argv) {
     const unsigned int pH{H/nYTiles};
 
     // starting thread to show progress
-    thread thread_show{preview, std::ref(img), progress, num_threads, 100};
+    thread thread_show{preview, std::ref(img), finPix, sumPix, num_threads, 200};
+    timer.reset();
 
     // start threads
     unsigned int x_start{0};
@@ -1047,7 +1073,7 @@ main(int argc, char** argv) {
     for (unsigned int n=0; n<num_threads-1; ++n) {
         cout << "... starting thread " << n << endl;
         threads[n] = thread{render, img_ptr, x_start, y_start, pH, pW, H, W, ASPECT_RATIO, FOV, origin, objects,
-         lights, background, std::ref(progress[ctr])};
+         lights, background, std::ref(finPix[ctr]), std::ref(sumPix[ctr])};
         colorize_image_tile(img, ctr++, x_start, y_start, pW, pH);
         x_start += pW;
         if (x_start >= W) {
@@ -1058,7 +1084,7 @@ main(int argc, char** argv) {
 
     // main thread does the rest
     colorize_image_tile(img, ctr, x_start, y_start, pW, pH);
-    render(img_ptr, x_start, y_start, pH, pW, H, W, ASPECT_RATIO, FOV, origin, objects, lights, background, progress[ctr]);
+    render(img_ptr, x_start, y_start, pH, pW, H, W, ASPECT_RATIO, FOV, origin, objects, lights, background, finPix[ctr], sumPix[ctr]);
 
     // wait for other threads to finish
     for (unsigned int n=0; n<num_threads-1; ++n) {
@@ -1066,6 +1092,7 @@ main(int argc, char** argv) {
         if (threads[n].joinable())
             threads[n].join();
     }
+    cout << "... finished rendering (" << timer.elapsed() << "s)" << endl;
     processing = false;
     if (thread_show.joinable())
         thread_show.join();
