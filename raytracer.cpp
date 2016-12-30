@@ -23,17 +23,23 @@
  * TODOs
  *
  * - todo: Add material with different reflection models (diffuse, specular, refraction etc.)
- * - todo: Implement ply file loading -> very first draft implemented
  * - todo: Loading scene from file (xml, YAML etc.) -> I would prefer yaml
- *
+ * - todo: Implement anti aliasing
  */
 
 #ifndef MT_TRIANGLE_INTERSECT
 #define MT_TRIANGLE_INTERSECT   1
 #endif
 
+/**
+ * Back-face culling basically leads some performance improvements. But it only works properly with solid objects.
+ * Hence, shadows might not be rendered correctly when CULLING is turned on and you want to render hulls instead
+ * of solid objects. This is why it is turned of per default.
+ * Refer to https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/single-vs-double-sided-triangle-backface-culling
+ * to reader more.
+ */
 #ifndef CULLING
-#define CULLING     1
+#define CULLING     0
 #endif
 
 using namespace std;
