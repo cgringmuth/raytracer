@@ -28,8 +28,13 @@
  *
  */
 
+#ifndef MT_TRIANGLE_INTERSECT
 #define MT_TRIANGLE_INTERSECT   1
+#endif
 
+#ifndef CULLING
+#define CULLING     1
+#endif
 
 using namespace std;
 
@@ -413,8 +418,13 @@ struct Triangle : public Object {
 
         // if determinant is negative triangle is backfacing
         // if determinant is close to 0 ray is missing triangle
+#if CULLING == 1
         if (det < EPS)
             return false;
+#else
+        if (abs(det) < EPS)
+            return false;
+#endif
         const double invDet = 1 / det;
 
         // calc u
