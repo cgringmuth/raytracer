@@ -824,11 +824,11 @@ create_box(vector<shared_ptr<Object>>& objects) {
 //    objects.push_back(make_shared<Triangle>( v6, v0, v3, color));
 //    objects.push_back(make_shared<Triangle>( v6, v3, v5, color));
     // bottom
-    // 7---4
+    // 4---7
     // | \ |
-    // 1---2
-    triangles.emplace_back(Triangle{v7, v1, v2, color});
-    triangles.emplace_back(Triangle{v7, v1, v2, color});
+    // 2---1
+    triangles.emplace_back(Triangle{v4, v2, v1, color});
+    triangles.emplace_back(Triangle{v4, v1, v7, color});
 //    objects.push_back(make_shared<Triangle>( v7, v1, v2, color));
 //    objects.push_back(make_shared<Triangle>( v7, v1, v2, color));
     shared_ptr<Model> model{make_shared<Model>(color, triangles)};
