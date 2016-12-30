@@ -389,13 +389,13 @@ struct Plane : public Object {
 };
 
 struct Triangle : public Object {
-    Vec3d v0, v1, v2;
+    Vec3d v0, v1, v2, normal;
 
     Triangle(const Vec3d& v0, const Vec3d& v1, const Vec3d& v2, const Color& color)
-            : v0{v0}, v1{v1}, v2{v2}, Object{color} {}
+            : v0{v0}, v1{v1}, v2{v2}, Object{color}, normal{calcNormal()} { }
 
     Triangle(const Vec3d& v0, const Vec3d& v1, const Vec3d& v2)
-            : v0{v0}, v1{v1}, v2{v2} {}
+            : v0{v0}, v1{v1}, v2{v2}, normal{calcNormal()} {}
 
     virtual bool intersect(const Ray& ray, double& dist, Vec3d& normal) const override {
         // todo: improve performance (http://www.cs.virginia.edu/%7Egfx/Courses/2003/ImageSynthesis/papers/Acceleration/Fast%20MinimumStorage%20RayTriangle%20Intersection.pdf)
@@ -443,11 +443,14 @@ struct Triangle : public Object {
     }
 
     virtual Vec3d getNormal(const Vec3d& vec) const override {
+        return normal;
+    }
+
+    Vec3d calcNormal() {
         const Vec3d edge1{v2 - v0};
         const Vec3d edge0{v1 - v0};
-        Vec3d normal{cross_product(edge0, edge1)};
+        normal = cross_product(edge0, edge1);
         normal.normalize();
-//        cout << "normal: " << normal << endl;
         return normal;
     }
 
@@ -974,14 +977,14 @@ create_scene(vector<shared_ptr<Object>>& objects, vector<Light>& lights) {
     const string mesh_root{"/home/chris/shared/github/chris/raytracer/data/3d_meshes/"};
     string bunny_res4_path{mesh_root+"bunny/reconstruction/bun_zipper_res4.ply"};
     string bunny_path{mesh_root+"bunny/reconstruction/bun_zipper.ply"};
-    shared_ptr<Model> bunny{Model::load_ply(bunny_res4_path)};
+    shared_ptr<Model> bunny{Model::load_ply(bunny_path)};
     bunny->scale(15);
     bunny->translate(Vec3d{-2, -4, -7.5});
     objects.push_back(bunny);
 
     string buddha_res4_path{mesh_root+"happy_recon/happy_vrip_res4.ply"};
     string buddha_path{mesh_root+"happy_recon/happy_vrip.ply"};
-    shared_ptr<Model> buddha{Model::load_ply(buddha_res4_path)};
+    shared_ptr<Model> buddha{Model::load_ply(buddha_path)};
     buddha->scale(15);
     buddha->translate(Vec3d{2, -4, -7.5});
     buddha->material.ks = 0.9;
