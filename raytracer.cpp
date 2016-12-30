@@ -842,6 +842,8 @@ preview(cv::Mat& img, unsigned int* finPixArr, unsigned int* sumPixArr, int numP
     int key;
     double progress, curElapsed, lastElapsed;
     unsigned int curFinPix{0}, lastFinPix{0};
+    bool printedProgress{false};
+    const unsigned int progressInterval{5};
     while(processing)
     {
         cv::Mat tmpimg{img.clone()};
@@ -870,6 +872,13 @@ preview(cv::Mat& img, unsigned int* finPixArr, unsigned int* sumPixArr, int numP
         const int y{10};
         const int border{12};
         const double alpha{0.2};
+
+        if (!((unsigned int)progress % progressInterval) && !printedProgress){
+            cout << "... " << text << endl;
+            printedProgress = true;
+        }
+
+        printedProgress = !((unsigned int)progress % progressInterval);
 
         // draw box;
         cv::Rect roi{x, y, textSize.width+border, textSize.height+border};
@@ -1023,14 +1032,14 @@ create_scene(vector<shared_ptr<Object>>& objects, vector<Light>& lights) {
     const string mesh_root{"/home/chris/shared/github/chris/raytracer/data/3d_meshes/"};
     string bunny_res4_path{mesh_root+"bunny/reconstruction/bun_zipper_res4.ply"};
     string bunny_path{mesh_root+"bunny/reconstruction/bun_zipper.ply"};
-    shared_ptr<Model> bunny{Model::load_ply(bunny_path)};
+    shared_ptr<Model> bunny{Model::load_ply(bunny_res4_path)};
     bunny->scale(15);
     bunny->translate(Vec3d{-2, -4, -7.5});
     objects.push_back(bunny);
 
     string buddha_res4_path{mesh_root+"happy_recon/happy_vrip_res4.ply"};
     string buddha_path{mesh_root+"happy_recon/happy_vrip.ply"};
-    shared_ptr<Model> buddha{Model::load_ply(buddha_path)};
+    shared_ptr<Model> buddha{Model::load_ply(buddha_res4_path)};
     buddha->scale(15);
     buddha->translate(Vec3d{2, -4, -7.5});
     buddha->material.ks = 0.9;
@@ -1112,8 +1121,6 @@ main(int argc, char** argv) {
     const unsigned int pW{W/nXTiles};
     const unsigned int pH{H/nYTiles};
 
-    // starting thread to show progress
-    thread thread_show{preview, std::ref(img), finPix, sumPix, num_threads, 200};
     timer.reset();
 
     // start threads
@@ -1131,6 +1138,10 @@ main(int argc, char** argv) {
             y_start += pH;
         }
     }
+
+    // starting thread to show progress
+    thread thread_show{preview, std::ref(img), finPix, sumPix, num_threads, 200};
+
 
     // main thread does the rest
     colorize_image_tile(img, ctr, x_start, y_start, pW, pH);
