@@ -930,7 +930,7 @@ preview(cv::Mat& img, unsigned int* finPixArr, unsigned int* sumPixArr, int numP
 }
 
 Color
-trace(const vector<shared_ptr<Object>>& objects,
+ trace(const vector<shared_ptr<Object>>& objects,
       const vector<Light>& lights,
       const Color& background,
       const Ray& ray,
@@ -1072,13 +1072,13 @@ create_scene(vector<shared_ptr<Object>>& objects, vector<Light>& lights) {
 //    lights.emplace_back(Light{Vec3d{5, -5, -2}, Color::white()*0.5});
 //    lights.emplace_back(Light{Vec{-30,-20,1}});
 
-    objects.push_back(make_shared<Sphere>(Vec3d{0, 0, -10}, 1, Material(Color::red(), 0, 0, 1, 16)));
+    objects.push_back(make_shared<Sphere>(Vec3d{0, 0, -8}, 1, Material(Color::red(), 0, 0, 1, 16)));
 //    objects.push_back(make_shared<Sphere>(Vec{10,0,-20}, 5, scolor));
-    objects.push_back(make_shared<Sphere>(Vec3d{1.75, -1.5, -9}, 0.3, Color{1, 1, 0}));
+    objects.push_back(make_shared<Sphere>(Vec3d{1.75, -1.5, -7}, 0.3, Color{1, 1, 0}));
 
-    objects.push_back(make_shared<Sphere>(Vec3d{-1, -1, -7}, 0.5, Color::blue()));
+    objects.push_back(make_shared<Sphere>(Vec3d{-1, -1, -6}, 0.5, Color::blue()));
     objects.push_back(make_shared<Sphere>(Vec3d{80, -6, -150}, 5, Color{0, 0, 1}));
-    objects.push_back(make_shared<Sphere>(Vec3d{-3, 2, -7}, 1, Color{1, 0, 1}));
+    objects.push_back(make_shared<Sphere>(Vec3d{-2.5, 2, -5}, 1, Color{1, 0, 1}));
 
     create_box(objects);
     const string mesh_root{"/home/chris/shared/github/chris/raytracer/data/3d_meshes/"};
@@ -1087,7 +1087,7 @@ create_scene(vector<shared_ptr<Object>>& objects, vector<Light>& lights) {
     string bunny_path{mesh_root+"bunny/reconstruction/bun_zipper.ply"};
     shared_ptr<Model> bunny{Model::load_ply(bunny_path)};
     bunny->scale(20);
-    bunny->translate(Vec3d{-2, -4, -7.5});
+    bunny->translate(Vec3d{-1, -2.75, -5});
     objects.push_back(bunny);
 
 
