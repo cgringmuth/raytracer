@@ -68,6 +68,7 @@ const string winName{"image"};
 typedef unsigned char ImageType;
 Timer timer;
 constexpr double EPS{0.000001};
+constexpr int MAX_ITR{5};
 
 
 /** 3D vector in cartesian space.
@@ -81,6 +82,14 @@ struct Vec3d {
     Vec3d(double x, double y, double z) : x{x}, y{y}, z{z} {}
 
     Vec3d(const Vec3d& v) : x{v.x}, y{v.y}, z{v.z} {}
+
+    Vec3d operator-() const {
+        Vec3d v;
+        v.x = -x;
+        v.y = -y;
+        v.z = -z;
+        return v;
+    }
 
     Vec3d& operator-=(const Vec3d& rhs) {
         x -= rhs.x;
@@ -222,13 +231,20 @@ T clamp(T min, T max, T val) {
  *
  */
 struct Color {
+
     double r, g, b;
 
     Color() : r{0}, g{0}, b{0} {};
-
-    Color(const double v) : r{v}, g{v}, b{v} {};
-
+    explicit Color(const double v) : r{v}, g{v}, b{v} {};
     Color(double r, double g, double b) : r{r}, g{g}, b{b} {};
+    Color(const Color& color) : r{color.r}, g{color.g}, b{color.b} {};
+
+    Color& operator/=(double d) {
+        r /= d;
+        g /= d;
+        b /= d;
+        return *this;
+    }
 
     Color& operator*=(double d) {
         r *= d;
@@ -295,12 +311,20 @@ struct Color {
 
 };
 
+Color operator/(Color lhs, const double d) {
+    return lhs /= d;
+}
+
 Color operator+(Color lhs, const Color& rhs) {
     return lhs += rhs;
 }
 
 Color operator*(Color lhs, const double d) {
     return lhs *= d;
+}
+
+Color operator*(const double d, Color rhs) {
+    return rhs *= d;
 }
 
 Color operator*(Color lhs, const Color& rhs) {
@@ -336,7 +360,6 @@ struct Material {
 
     Material(const Color& color, double ka=0.15, double kd=0.7, double ks=0.3, double specRefExp=8)
             : color(color), ka(ka), kd(kd), ks(ks), specRefExp(specRefExp) {}
-
     Material() : color{} {}
 };
 
@@ -404,15 +427,14 @@ struct Triangle : public Object {
 
     Triangle(const Vec3d& v0, const Vec3d& v1, const Vec3d& v2, const Color& color)
             : v0{v0}, v1{v1}, v2{v2}, Object{color}, normal{calcNormal()} { }
-
-    Triangle(const Vec3d& v0, const Vec3d& v1, const Vec3d& v2)
-            : v0{v0}, v1{v1}, v2{v2}, normal{calcNormal()} {}
+    Triangle(const Vec3d& v0, const Vec3d& v1, const Vec3d& v2, const Material material=Material{})
+            : v0{v0}, v1{v1}, v2{v2}, Object{material}, normal{calcNormal()} {}
 
     virtual bool intersect(const Ray& ray, double& dist, Vec3d& normal) const override {
         // todo: improve performance (http://www.cs.virginia.edu/%7Egfx/Courses/2003/ImageSynthesis/papers/Acceleration/Fast%20MinimumStorage%20RayTriangle%20Intersection.pdf)
         normal = this->normal;
 #if MT_TRIANGLE_INTERSECT==1
-        // assuming each point in triangle can be described by (uv-space)
+        // Any point on the triangle can be described by (in the uv-space)
         // P = v0 + u(v1-v0) + v(v2-v0)
         // P can also be described by ray equation (when hit triangle)
         // P = o + td
@@ -422,8 +444,8 @@ struct Triangle : public Object {
         const Vec3d pVec{ray.direction.cross_product(v0v2)};
         const double det{pVec.dotProduct(v0v1)};
 
-        // if determinant is negative triangle is backfacing
-        // if determinant is close to 0 ray is missing triangle
+        // if determinant is negative, triangle is backfacing
+        // if determinant is close to 0, ray is missing triangle
 #if CULLING == 1
         if (det < EPS)
             return false;
@@ -538,7 +560,7 @@ struct Model : Object {
     vector<Triangle> faces;
 
     Model(const Color& color, const vector<Triangle>& faces) : Object(color), faces(faces) {}
-
+    Model(const Material& material, const vector<Triangle>& faces) : Object(material), faces(faces) {}
     Model(const Color& color) : Object(color) {}
 
     Model() {}
@@ -608,7 +630,7 @@ struct Model : Object {
 
         model->faces = faces;
         model->material = Material(color);
-        model->material.ks = 0.6;
+        model->material.ks = 0.5;
 
         return model;
     }
@@ -779,13 +801,17 @@ create_box(vector<shared_ptr<Object>>& objects) {
     const Vec3d v2{x_offset + x_width_half, y_offset - y_width_half, z_offset + z_width_half};
     const Vec3d v3{x_offset + x_width_half, y_offset + y_width_half, z_offset + z_width_half};
     // back
-    const Vec3d v5{x_offset + x_width_half, y_offset + y_width_half, z_offset - z_width_half};
     const Vec3d v4{x_offset + x_width_half, y_offset - y_width_half, z_offset - z_width_half};
+    const Vec3d v5{x_offset + x_width_half, y_offset + y_width_half, z_offset - z_width_half};
     const Vec3d v6{x_offset - x_width_half, y_offset + y_width_half, z_offset - z_width_half};
     const Vec3d v7{x_offset - x_width_half, y_offset - y_width_half, z_offset - z_width_half};
 
 //    const Color color{192.0 / 255, 155.0 / 255, 94.0 / 255};
     const Color color = Color::blue();
+    Material mat{color};
+    mat.ks = 0.4;
+    mat.ka = 0.2;
+    mat.kd = 0.5;
     vector<Triangle> triangles;
 
 
@@ -793,51 +819,51 @@ create_box(vector<shared_ptr<Object>>& objects) {
     // 0---3
     // | \ |
     // 1---2
-    triangles.emplace_back(Triangle{v0, v1, v2, color});
-    triangles.emplace_back(Triangle{v0, v2, v3, color});
+    triangles.emplace_back(Triangle{v0, v1, v2, mat});
+    triangles.emplace_back(Triangle{v0, v2, v3, mat});
 //    objects.push_back(make_shared<Triangle>( v0, v1, v2, color));
 //    objects.push_back(make_shared<Triangle>( v0, v2, v3, color));
     // right
     // 3---5
     // | \ |
     // 2---4
-    triangles.emplace_back(Triangle{v3, v2, v4, color});
-    triangles.emplace_back(Triangle{v3, v4, v5, color});
+    triangles.emplace_back(Triangle{v3, v2, v4, mat});
+    triangles.emplace_back(Triangle{v3, v4, v5, mat});
 //    objects.push_back(make_shared<Triangle>( v3, v2, v4, color));
 //    objects.push_back(make_shared<Triangle>( v3, v4, v5, color));
     // back
     // 5---6
     // | \ |
     // 4---7
-    triangles.emplace_back(Triangle{v5, v4, v7, color});
-    triangles.emplace_back(Triangle{v5, v7, v6, color});
+    triangles.emplace_back(Triangle{v5, v4, v7, mat});
+    triangles.emplace_back(Triangle{v5, v7, v6, mat});
 //    objects.push_back(make_shared<Triangle>( v5, v4, v7, color));
 //    objects.push_back(make_shared<Triangle>( v5, v7, v6, color));
     // left
     // 6---0
     // | \ |
     // 7---1
-    triangles.emplace_back(Triangle{v6, v7, v1, color});
-    triangles.emplace_back(Triangle{v6, v1, v0, color});
+    triangles.emplace_back(Triangle{v6, v1, v0, mat});
+    triangles.emplace_back(Triangle{v6, v7, v1, mat});
 //    objects.push_back(make_shared<Triangle>( v6, v7, v1, color));
 //    objects.push_back(make_shared<Triangle>( v6, v1, v0, color));
     // top
     // 6---5
     // | \ |
     // 0---3
-    triangles.emplace_back(Triangle{v6, v0, v3, color});
-    triangles.emplace_back(Triangle{v6, v3, v5, color});
+    triangles.emplace_back(Triangle{v6, v0, v3, mat});
+    triangles.emplace_back(Triangle{v6, v3, v5, mat});
 //    objects.push_back(make_shared<Triangle>( v6, v0, v3, color));
 //    objects.push_back(make_shared<Triangle>( v6, v3, v5, color));
     // bottom
     // 4---7
     // | \ |
     // 2---1
-    triangles.emplace_back(Triangle{v4, v2, v1, color});
-    triangles.emplace_back(Triangle{v4, v1, v7, color});
+    triangles.emplace_back(Triangle{v4, v2, v1, mat});
+    triangles.emplace_back(Triangle{v4, v1, v7, mat});
 //    objects.push_back(make_shared<Triangle>( v7, v1, v2, color));
 //    objects.push_back(make_shared<Triangle>( v7, v1, v2, color));
-    shared_ptr<Model> model{make_shared<Model>(color, triangles)};
+    shared_ptr<Model> model{make_shared<Model>(mat, triangles)};
     objects.push_back(model);
 }
 
@@ -903,6 +929,83 @@ preview(cv::Mat& img, unsigned int* finPixArr, unsigned int* sumPixArr, int numP
     }
 }
 
+Color
+trace(const vector<shared_ptr<Object>>& objects,
+      const vector<Light>& lights,
+      const Color& background,
+      const Ray& ray,
+      int itr) {
+    double dist{::std::numeric_limits<double>::max()}, tmpdist;
+    const double bias{0.0001};   // bias origin of reflective ray a little into normal direction
+    Color color{background};
+    Vec3d tmpnormal, hitNormal;
+    Object* cur_obj{nullptr};
+
+    // get closest intersection
+    for (const auto& o : objects) {
+        if (o->intersect(ray, tmpdist, tmpnormal)) {
+            if (tmpdist < dist) {
+                dist = tmpdist;
+                hitNormal = tmpnormal;
+                cur_obj = &(*o);
+            }
+        }
+    }
+
+    if (cur_obj != nullptr) {
+        color = Color(0.0);
+        const Material& cmat = cur_obj->material;
+        const Vec3d hitPt{ray.getPoint(dist)};
+
+        for (const auto& l : lights) {
+            Vec3d lv{l.pos - hitPt};
+            const double ldist{lv.length()};
+            lv.normalize();
+            bool inShadow{false};
+
+            // cast shadow ray and check if other object is blocking light
+            const Ray shadow_ray{hitPt + hitNormal * bias, lv};
+            for (const auto& o : objects) {
+                const bool hit{o->intersect(shadow_ray, tmpdist, tmpnormal)};
+                if (hit && tmpdist < ldist) {
+                    inShadow = true;
+                    break;
+                }
+            }
+            if (inShadow) {
+                continue;
+            }
+
+
+            // diffuse shading
+            const double cosPhi{
+                    max(hitNormal.dotProduct(lv), 0.0)};    // todo: check why we have to clip negative values
+            color += cmat.color * l.color * cmat.kd * (cosPhi / (ldist * ldist));    // todo: change color to diffuse color
+
+            // specular shading
+            const Vec3d reflectRay{hitNormal * 2 * dotProduct(hitNormal,lv) - lv};
+            const double cosAlpha{
+                    max(reflectRay.dotProduct(lv), 0.0)};    // todo: check why we have to clip negative values
+            color += l.color * cmat.ks * (pow(cosAlpha, cmat.specRefExp) / (ldist * ldist));     // todo: add reflective color here
+            color.clamp(0, 1);
+        }
+
+        // reflective shading recursive tracing
+        if (++itr <= MAX_ITR) {
+            const Vec3d invDir{-ray.direction};
+            const Vec3d reflectRay{hitNormal * 2 * dotProduct(hitNormal,invDir) - invDir};
+            const Color tcolor = trace(objects, lights, background, Ray{hitPt + hitNormal * bias, reflectRay}, itr) / (double)(itr);
+            color += cmat.ks * tcolor;
+            color.clamp(0, 1);
+        }
+
+        color += cmat.color * cmat.ka;
+        color.clamp(0, 1);
+    }
+
+    return color;
+}
+
 void
 render(ImageType* img, unsigned int x_start, unsigned int y_start, unsigned int cH, unsigned int cW, const unsigned int H, const unsigned int W,
        const double ASPECT_RATIO, const double FOV, const Vec3d& origin, const vector<shared_ptr<Object>>& objects,
@@ -917,76 +1020,12 @@ render(ImageType* img, unsigned int x_start, unsigned int y_start, unsigned int 
             const double py_ndc = (y + 0.5) / H;
             const double cam_x = (2 * px_ndc - 1) * ASPECT_RATIO * tan(deg2rad(FOV) / 2);
             const double cam_y = (1 - 2 * py_ndc) * tan(deg2rad(FOV) / 2);
-
             Vec3d d{cam_x, cam_y, -1};  // camera looks in negative z direction
             d.normalize();
             const Ray ray{origin, d};
 
-            double dist{std::numeric_limits<double>::max()}, tmpdist;
-            Color px_color;
-            Vec3d tmpnormal, normal;
-            bool intersect{false};
-            Object* cur_obj{nullptr};
-
-
-            // check intersections
-            for (const auto& o : objects) {
-                if (o->intersect(ray, tmpdist, tmpnormal)) {
-                    if (tmpdist < dist) {
-                        dist = tmpdist;
-                        normal = tmpnormal;
-                        cur_obj = &(*o);
-                    }
-                }
-            }
-
-            if (cur_obj != nullptr) {
-                Material& cmat = cur_obj->material;
-                Vec3d phit{ray.getPoint(dist)};
-//                cout << typeid(*cur_obj).name() << " ";
-
-                for (const auto& l : lights) {
-                    Vec3d lv{l.pos - phit};
-//                    Vec lv{l.pos};
-                    const double ldist{lv.length()};
-                    lv.normalize();
-                    bool inShadow{false};
-
-                    // cast shadow ray and check if other object is blocking light
-                    const Ray shadow_ray{phit, lv};
-                    for (const auto& o : objects) {
-                        const bool hit{o->intersect(shadow_ray, tmpdist, tmpnormal)};
-                        if (hit && tmpdist < ldist) {
-                            inShadow = true;
-                            break;
-                        }
-                    }
-                    if (inShadow) {
-                        continue;
-                    }
-
-                    const double cosPhi{
-                            std::max(normal.dotProduct(lv), 0.0)};    // todo: check why we have to clip negative values
-//                    const double cosPhi{n.dotProduct(lv)};
-
-                    // diffuse shading
-                    px_color += cmat.color * l.color * cmat.kd * (cosPhi / (ldist * ldist));
-                    // specular shading
-                    const Vec3d reflectRay{normal*2*dotProduct(normal,lv) -lv};
-                    const double cosAlpha{
-                            std::max(reflectRay.dotProduct(lv), 0.0)};    // todo: check why we have to clip negative values
-                    px_color += cmat.color * l.color * cmat.ks * (pow(cosAlpha, cmat.specRefExp) / (ldist * ldist));
-
-                    px_color.clamp(0, 1);
-                }
-                px_color = px_color + cmat.color * cmat.ka;
-                px_color.clamp(0, 1);
-                intersect = true;
-            }
-
-            if (!intersect) {
-                px_color = background;
-            }
+            // trace primary/camera ray
+            Color px_color{trace(objects, lights, background, ray, 0)};
 
             // Using Opencv bgr
             *(img_ptr++) = (ImageType) (px_color.b * 255);
@@ -1027,9 +1066,16 @@ colorize_image_tile(cv::Mat img, int num, int x_start, int y_start, int pW, int 
 
 void
 create_scene(vector<shared_ptr<Object>>& objects, vector<Light>& lights) {
-    objects.push_back(make_shared<Sphere>(Vec3d{0, 0, -10}, 1, Material(Color::red(), 0.1, 0.2, 0.7)));
+    lights.emplace_back(Light{Vec3d{0, 3, -7.5}, Color::white() * 20});
+//    lights.emplace_back(Light{Vec3d{0, 8, -9}, Color::white()*0.5});
+    lights.emplace_back(Light{Vec3d{-1, -1, -1}, Color::white() * 7});
+//    lights.emplace_back(Light{Vec3d{5, -5, -2}, Color::white()*0.5});
+//    lights.emplace_back(Light{Vec{-30,-20,1}});
+
+    objects.push_back(make_shared<Sphere>(Vec3d{0, 0, -10}, 1, Material(Color::red(), 0, 0, 1, 16)));
 //    objects.push_back(make_shared<Sphere>(Vec{10,0,-20}, 5, scolor));
     objects.push_back(make_shared<Sphere>(Vec3d{1.75, -1.5, -9}, 0.3, Color{1, 1, 0}));
+
     objects.push_back(make_shared<Sphere>(Vec3d{-1, -1, -7}, 0.5, Color::blue()));
     objects.push_back(make_shared<Sphere>(Vec3d{80, -6, -150}, 5, Color{0, 0, 1}));
     objects.push_back(make_shared<Sphere>(Vec3d{-3, 2, -7}, 1, Color{1, 0, 1}));
@@ -1037,19 +1083,29 @@ create_scene(vector<shared_ptr<Object>>& objects, vector<Light>& lights) {
     create_box(objects);
     const string mesh_root{"/home/chris/shared/github/chris/raytracer/data/3d_meshes/"};
     string bunny_res4_path{mesh_root+"bunny/reconstruction/bun_zipper_res4.ply"};
+    string bunny_res2_path{mesh_root+"bunny/reconstruction/bun_zipper_res2.ply"};
     string bunny_path{mesh_root+"bunny/reconstruction/bun_zipper.ply"};
-    shared_ptr<Model> bunny{Model::load_ply(bunny_res4_path)};
-    bunny->scale(15);
+    shared_ptr<Model> bunny{Model::load_ply(bunny_path)};
+    bunny->scale(20);
     bunny->translate(Vec3d{-2, -4, -7.5});
     objects.push_back(bunny);
 
-    string buddha_res4_path{mesh_root+"happy_recon/happy_vrip_res4.ply"};
-    string buddha_path{mesh_root+"happy_recon/happy_vrip.ply"};
-    shared_ptr<Model> buddha{Model::load_ply(buddha_res4_path)};
-    buddha->scale(15);
-    buddha->translate(Vec3d{2, -4, -7.5});
-    buddha->material.ks = 0.9;
-    objects.push_back(buddha);
+
+//    string draon_res4_path{mesh_root+"dragon_recon/dragon_vrip_res4.ply"};
+//    string draon_path{mesh_root+"dragon_recon/dragon_vrip.ply"};
+//    shared_ptr<Model> dragon{Model::load_ply(draon_path)};
+//    dragon->scale(15);
+//    dragon->translate(Vec3d{2, -2, -7.5});
+//    objects.push_back(dragon);
+
+
+//    string buddha_res4_path{mesh_root+"happy_recon/happy_vrip_res4.ply"};
+//    string buddha_path{mesh_root+"happy_recon/happy_vrip.ply"};
+//    shared_ptr<Model> buddha{Model::load_ply(buddha_path)};
+//    buddha->scale(15);
+//    buddha->translate(Vec3d{2, -4, -7.5});
+//    buddha->material.ks = 0.9;
+//    objects.push_back(buddha);
 
 
     // planes
@@ -1067,11 +1123,7 @@ create_scene(vector<shared_ptr<Object>>& objects, vector<Light>& lights) {
     objects.push_back(make_shared<Plane>(0, -1, 0, box_len, wall_color));
 
 //    s.radius = 10;
-    lights.emplace_back(Light{Vec3d{0, 3, -7.5}, Color::white() * 20});
-//    lights.emplace_back(Light{Vec3d{0, 8, -9}, Color::white()*0.5});
-    lights.emplace_back(Light{Vec3d{-1, -1, -1}, Color::white() * 7});
-//    lights.emplace_back(Light{Vec3d{5, -5, -2}, Color::white()*0.5});
-//    lights.emplace_back(Light{Vec{-30,-20,1}});
+
 }
 
 int
