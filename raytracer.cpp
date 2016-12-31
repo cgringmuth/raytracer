@@ -358,7 +358,7 @@ struct Material {
     double ks;  // specular reflectance
     double specRefExp; // specular-reflection exponent
 
-    Material(const Color& color, double ka=0.15, double kd=0.7, double ks=0.3, double specRefExp=8)
+    Material(const Color& color, double ka=0.2, double kd=0.7, double ks=0.2, double specRefExp=8)
             : color(color), ka(ka), kd(kd), ks(ks), specRefExp(specRefExp) {}
     Material() : color{} {}
 };
@@ -393,6 +393,17 @@ struct Plane : public Object {
         this->b = pn[1];
         this->c = pn[2];
     }
+
+    Plane(double a, double b, double c, double d, const Material& material)
+            : a(a), b(b), c(c), d(d), Object(material) {
+        // normalize normal vector
+        Vec3d pn{a, b, c};
+        pn.normalize();
+        this->a = pn[0];
+        this->b = pn[1];
+        this->c = pn[2];
+    }
+
 
     Plane(Vec3d normal, double dist, const Color& color) : d{dist}, Object{color} {
         normal.normalize(); // make sure normal is normalized
@@ -568,7 +579,7 @@ struct Model : Object {
     static shared_ptr<Model> load_ply(const string& fname) {
         cout << "... loading model: " << fname << endl;
         shared_ptr<Model> model{make_shared<Model>()};
-        Color color{Color::white()};
+        Color color{Color::gray()};
 
         ifstream ifs{fname};
         if (!ifs.is_open())
@@ -1066,15 +1077,15 @@ colorize_image_tile(cv::Mat img, int num, int x_start, int y_start, int pW, int 
 
 void
 create_scene(vector<shared_ptr<Object>>& objects, vector<Light>& lights) {
-    lights.emplace_back(Light{Vec3d{0, 3, -7.5}, Color::white() * 20});
+    lights.emplace_back(Light{Vec3d{0, 3, -7.5}, Color::white() * 3});
 //    lights.emplace_back(Light{Vec3d{0, 8, -9}, Color::white()*0.5});
-    lights.emplace_back(Light{Vec3d{-1, -1, -1}, Color::white() * 7});
+    lights.emplace_back(Light{Vec3d{-1, -1, -1}, Color::white() * 10});
 //    lights.emplace_back(Light{Vec3d{5, -5, -2}, Color::white()*0.5});
 //    lights.emplace_back(Light{Vec{-30,-20,1}});
 
     objects.push_back(make_shared<Sphere>(Vec3d{0, 0, -8}, 1, Material(Color::red(), 0, 0, 1, 16)));
 //    objects.push_back(make_shared<Sphere>(Vec{10,0,-20}, 5, scolor));
-    objects.push_back(make_shared<Sphere>(Vec3d{1.75, -1.5, -7}, 0.3, Color{1, 1, 0}));
+    objects.push_back(make_shared<Sphere>(Vec3d{2, 0.25, -8}, 0.75, Material{Color{1, 1, 0}, 0.2, 0.7, 0}));
 
     objects.push_back(make_shared<Sphere>(Vec3d{-1, -1, -6}, 0.5, Color::blue()));
     objects.push_back(make_shared<Sphere>(Vec3d{80, -6, -150}, 5, Color{0, 0, 1}));
@@ -1109,10 +1120,10 @@ create_scene(vector<shared_ptr<Object>>& objects, vector<Light>& lights) {
 
 
     // planes
-    const int box_len{5};
+    const int box_len{4};
     // back
     const Color wall_color{192.0 / 255, 155.0 / 255, 94.0 / 255};
-    objects.push_back(make_shared<Plane>(0, 0, 1, box_len + 10, wall_color));
+    objects.push_back(make_shared<Plane>(0, 0, 1, box_len + 8, wall_color));
     // left
     objects.push_back(make_shared<Plane>(1, 0, 0, box_len, Color::red()));
     // right
@@ -1121,6 +1132,8 @@ create_scene(vector<shared_ptr<Object>>& objects, vector<Light>& lights) {
     objects.push_back(make_shared<Plane>(0, 1, 0, box_len, wall_color));
     // top
     objects.push_back(make_shared<Plane>(0, -1, 0, box_len, wall_color));
+    // behind camera
+    objects.push_back(make_shared<Plane>(0, 0, -1, box_len, Color(1,1,0)));
 
 //    s.radius = 10;
 
