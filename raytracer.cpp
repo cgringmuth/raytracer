@@ -21,12 +21,24 @@
 
 /**
  * TODOs
- *
  * - todo: Add material with different reflection models (diffuse, specular, refraction etc.)
  * - todo: Loading scene from file (xml, YAML etc.) -> I would prefer yaml
- * - todo: Implement anti aliasing
+ * - todo: Implement anti-aliasing
+ * - todo: Soft-shadows
+ * - todo: Area lights
+ * - todo: depth of field
+ * - todo: texture mapping
+ * - todo: optimization: do calculation on GPU
+ * - todo: optimization: early pruning of objects which cannot be hit (kd-tree, etc.)
+ * - todo: optimization: bounding box with fast intersection calculation around object (bounding box: sphere, box etc.)
+ *
  */
 
+
+/**
+ * This enables Moeller-Trumbore algorithm for triangle intersection calculation. It is the fastest intersection
+ * algorithm so far.
+ */
 #ifndef MT_TRIANGLE_INTERSECT
 #define MT_TRIANGLE_INTERSECT   1
 #endif
@@ -573,13 +585,12 @@ struct Model : Object {
     Model(const Color& color, const vector<Triangle>& faces) : Object(color), faces(faces) {}
     Model(const Material& material, const vector<Triangle>& faces) : Object(material), faces(faces) {}
     Model(const Color& color) : Object(color) {}
+    Model(const Material& material) : Object(material) {}
 
     Model() {}
 
-    static shared_ptr<Model> load_ply(const string& fname) {
+    static shared_ptr<Model> load_ply(const string& fname, const Material& material) {
         cout << "... loading model: " << fname << endl;
-        shared_ptr<Model> model{make_shared<Model>()};
-        Color color{Color::gray()};
 
         ifstream ifs{fname};
         if (!ifs.is_open())
@@ -633,17 +644,12 @@ struct Model : Object {
             int num, iv0, iv1, iv2;
             ss >> num >> iv0 >> iv1 >> iv2;
             if (num != 3) {
-                cerr << "Only triangles supported\n";
-                exit(1);
+                throw runtime_error{"Only triangles supported"};
             }
             faces.emplace_back(Triangle{vertices[iv0], vertices[iv1], vertices[iv2]});
         }
 
-        model->faces = faces;
-        model->material = Material(color);
-        model->material.ks = 0.5;
-
-        return model;
+        return make_shared<Model>(material, faces);
     }
 
     bool intersect(const Ray& ray, double& dist, Vec3d& normal) const override {
@@ -818,7 +824,7 @@ create_box(vector<shared_ptr<Object>>& objects) {
     const Vec3d v7{x_offset - x_width_half, y_offset - y_width_half, z_offset - z_width_half};
 
 //    const Color color{192.0 / 255, 155.0 / 255, 94.0 / 255};
-    const Color color = Color::blue();
+    const Color color = Color::light_gray();
     Material mat{color};
     mat.ks = 0.4;
     mat.ka = 0.2;
@@ -1079,7 +1085,7 @@ void
 create_scene(vector<shared_ptr<Object>>& objects, vector<Light>& lights) {
     lights.emplace_back(Light{Vec3d{0, 3, -7.5}, Color::white() * 3});
 //    lights.emplace_back(Light{Vec3d{0, 8, -9}, Color::white()*0.5});
-    lights.emplace_back(Light{Vec3d{-1, -1, -1}, Color::white() * 10});
+    lights.emplace_back(Light{Vec3d{0, 0, -1}, Color::white() * 10});
 //    lights.emplace_back(Light{Vec3d{5, -5, -2}, Color::white()*0.5});
 //    lights.emplace_back(Light{Vec{-30,-20,1}});
 
@@ -1096,7 +1102,7 @@ create_scene(vector<shared_ptr<Object>>& objects, vector<Light>& lights) {
     string bunny_res4_path{mesh_root+"bunny/reconstruction/bun_zipper_res4.ply"};
     string bunny_res2_path{mesh_root+"bunny/reconstruction/bun_zipper_res2.ply"};
     string bunny_path{mesh_root+"bunny/reconstruction/bun_zipper.ply"};
-    shared_ptr<Model> bunny{Model::load_ply(bunny_path)};
+    shared_ptr<Model> bunny{Model::load_ply(bunny_path, Material(Color::gray(), 0.1, 0.05, 0.8))};
     bunny->scale(20);
     bunny->translate(Vec3d{-1, -2.75, -5});
     objects.push_back(bunny);
@@ -1129,7 +1135,7 @@ create_scene(vector<shared_ptr<Object>>& objects, vector<Light>& lights) {
     // right
     objects.push_back(make_shared<Plane>(-1, 0, 0, box_len, Color::green()));
     // bottom
-    objects.push_back(make_shared<Plane>(0, 1, 0, box_len, wall_color));
+    objects.push_back(make_shared<Plane>(0, 1, 0, box_len, Color::blue()));
     // top
     objects.push_back(make_shared<Plane>(0, -1, 0, box_len, wall_color));
     // behind camera
@@ -1158,17 +1164,17 @@ main(int argc, char** argv) {
 
     // resolution has to be even
     constexpr unsigned int downScale{1};
-    constexpr unsigned int H{600/downScale};
-    constexpr unsigned int W{800/downScale};
-    ImageType* img_ptr = new ImageType[W*H*3];
-    memset(img_ptr, 0, sizeof(ImageType)*W*H*3);
-    cv::Mat img{H, W, CV_8UC3, img_ptr};
+    constexpr unsigned int imHeight{600/downScale};
+    constexpr unsigned int imWidth{800/downScale};
+    ImageType* img_ptr = new ImageType[imWidth*imHeight*3];
+    memset(img_ptr, 0, sizeof(ImageType)*imWidth*imHeight*3);
+    cv::Mat img{imHeight, imWidth, CV_8UC3, img_ptr};
     cv::namedWindow(winName, CV_WINDOW_AUTOSIZE);
 
 //    constexpr unsigned int H = 250;
 //    constexpr unsigned int W = 350;
     constexpr unsigned int MAX_VAL = 255;
-    constexpr double ASPECT_RATIO = (double) W / H;
+    constexpr double ASPECT_RATIO = (double) imWidth / imHeight;
     constexpr double FOV = 60;
 
     Color background{0, 0.5, 0.5};
@@ -1189,8 +1195,8 @@ main(int argc, char** argv) {
     // split image into tiles (2x4)
     const unsigned int nXTiles{2};
     const unsigned int nYTiles{4};
-    const unsigned int pW{W/nXTiles};
-    const unsigned int pH{H/nYTiles};
+    const unsigned int tileWidth{imWidth/nXTiles};
+    const unsigned int tileHeight{imHeight/nYTiles};
 
     timer.reset();
 
@@ -1200,13 +1206,13 @@ main(int argc, char** argv) {
     unsigned int ctr{0};
     for (unsigned int n=0; n<num_threads-1; ++n) {
         cout << "... starting thread " << n << endl;
-        threads[n] = thread{render, img_ptr, x_start, y_start, pH, pW, H, W, ASPECT_RATIO, FOV, origin, objects,
+        threads[n] = thread{render, img_ptr, x_start, y_start, tileHeight, tileWidth, imHeight, imWidth, ASPECT_RATIO, FOV, origin, objects,
          lights, background, std::ref(finPix[ctr]), std::ref(sumPix[ctr])};
-        colorize_image_tile(img, ctr++, x_start, y_start, pW, pH);
-        x_start += pW;
-        if (x_start >= W) {
+        colorize_image_tile(img, ctr++, x_start, y_start, tileWidth, tileHeight);
+        x_start += tileWidth;
+        if (x_start >= imWidth) {
             x_start = 0;
-            y_start += pH;
+            y_start += tileHeight;
         }
     }
 
@@ -1215,8 +1221,8 @@ main(int argc, char** argv) {
 
 
     // main thread does the rest
-    colorize_image_tile(img, ctr, x_start, y_start, pW, pH);
-    render(img_ptr, x_start, y_start, pH, pW, H, W, ASPECT_RATIO, FOV, origin, objects, lights, background, finPix[ctr], sumPix[ctr]);
+    colorize_image_tile(img, ctr, x_start, y_start, tileWidth, tileHeight);
+    render(img_ptr, x_start, y_start, tileHeight, tileWidth, imHeight, imWidth, ASPECT_RATIO, FOV, origin, objects, lights, background, finPix[ctr], sumPix[ctr]);
 
     // wait for other threads to finish
     for (unsigned int n=0; n<num_threads-1; ++n) {
