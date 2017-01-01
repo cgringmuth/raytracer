@@ -32,7 +32,7 @@
  * - todo: optimization: early pruning of objects which cannot be hit (kd-tree, etc.)
  * - todo: optimization: bounding box with fast intersection calculation around object (bounding box: sphere, box etc.)
  * - todo: create scene to hold primitives, lights etc.
- * - todo: create camera class
+ * - todo: restructure project
  */
 
 
@@ -882,13 +882,12 @@ struct Camera {
             eye(Vec3d{0,0,0}), up(Vec3d{0,1,0}), at(Vec3d{0,0,-1}), right(cross_product(at, up)), aspectRatio(aspectRatio), fov(fov), imWidth(imWidth),
                                   imHeight(imHeight) {}
 
-    Ray getPrimRay(unsigned int x, unsigned int y) const {
-        const double px_ndc = (x + 0.5) / imWidth;
-        const double py_ndc = (y + 0.5) / imHeight;
-        const double cam_x = (2 * px_ndc - 1) * aspectRatio * tan(deg2rad(fov) / 2);
-        const double cam_y = (1 - 2 * py_ndc) * tan(deg2rad(fov) / 2);
-        Vec3d camDir{cam_x, cam_y, 0};
-        camDir = right * cam_x + up * cam_y + at;
+    Ray castRay(unsigned int x, unsigned int y) const {
+        const double px_ndc{(x + 0.5) / imWidth};
+        const double py_ndc{(y + 0.5) / imHeight};
+        const double cam_x{(2 * px_ndc - 1) * aspectRatio * tan(deg2rad(fov) / 2)};
+        const double cam_y{(1 - 2 * py_ndc) * tan(deg2rad(fov) / 2)};
+        Vec3d camDir{right * cam_x + up * cam_y + at};
         camDir.normalize();
 
         return Ray{eye, camDir};
@@ -896,10 +895,8 @@ struct Camera {
 
     Camera& rotate(double alpha, double beta, double gamma) {
         const Mat3d rot = Mat3d::rotation(alpha, beta, gamma);
-        up *= rot;
-        up.normalize();
-        at *= rot;
-        at.normalize();
+        up *= rot; up.normalize();
+        at *= rot; at.normalize();
         right = cross_product(at, up);
         return *this;
     }
@@ -1186,7 +1183,7 @@ render(ImageType* img, unsigned int x_start, unsigned int y_start, unsigned int 
     for (unsigned int y = y_start; y < cH+y_start; ++y) {
         ImageType* img_ptr{img + 3 * (y*W + x_start)};
         for (unsigned int x = x_start; x < cW+x_start; ++x) {
-            const Ray ray = camera.getPrimRay(x, y);
+            const Ray ray = camera.castRay(x, y);
 
             // trace primary/camera ray
             Color px_color{trace(objects, lights, background, ray, 0)};
