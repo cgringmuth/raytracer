@@ -31,7 +31,8 @@
  * - todo: optimization: do calculation on GPU
  * - todo: optimization: early pruning of objects which cannot be hit (kd-tree, etc.)
  * - todo: optimization: bounding box with fast intersection calculation around object (bounding box: sphere, box etc.)
- *
+ * - todo: create scene to hold primitives, lights etc.
+ * - todo: create camera class
  */
 
 
@@ -82,6 +83,110 @@ Timer timer;
 constexpr double EPS{0.000001};
 constexpr int MAX_ITR{5};
 
+
+/** Converts angle in degree into rad.
+ *
+ * @param ang angle in degree
+ * @return angle in rad
+ */
+double deg2rad(double ang) {
+    return ang * M_PI / 180;
+}
+
+
+struct Mat3d {
+    double v[9];
+    static const unsigned int width{3};
+    static const unsigned int height{3};
+
+    Mat3d(double v0, double v1, double v2,
+          double v3, double v4, double v5,
+          double v6, double v7, double v8) {
+        v[0] = v0; v[1] = v1; v[2] = v2;
+        v[3] = v3; v[4] = v4; v[5] = v5;
+        v[6] = v6; v[7] = v7; v[8] = v8;
+    }
+
+    Mat3d(double* v) {
+        memcpy(this->v, v, sizeof(double)*length());
+    }
+
+    double& at(unsigned int x, unsigned int y) { return v[y*width + x]; }
+    double at(unsigned int x, unsigned int y) const { return v[y*width + x]; }
+
+    double& operator[](size_t idx) {
+        return v[idx];
+    }
+
+    double operator[](size_t idx) const {
+        return v[idx];
+    }
+
+    size_t length() const { return width*height; }
+
+    Mat3d& operator*=(const Mat3d& rhs) {
+        at(0,0) = at(0,0)*rhs.at(0,0) + at(1,0)*rhs.at(0,1) + at(2,0)*rhs.at(0,2);
+        at(1,0) = at(0,0)*rhs.at(1,0) + at(1,0)*rhs.at(1,1) + at(2,0)*rhs.at(1,2);
+        at(2,0) = at(0,0)*rhs.at(2,0) + at(1,0)*rhs.at(2,1) + at(2,0)*rhs.at(2,2);
+
+        at(0,1) = at(0,1)*rhs.at(0,0) + at(1,1)*rhs.at(0,1) + at(2,1)*rhs.at(0,2);
+        at(1,1) = at(0,1)*rhs.at(1,0) + at(1,1)*rhs.at(1,1) + at(2,1)*rhs.at(1,2);
+        at(2,1) = at(0,1)*rhs.at(2,0) + at(1,1)*rhs.at(2,1) + at(2,1)*rhs.at(2,2);
+
+        at(0,2) = at(0,2)*rhs.at(0,0) + at(1,2)*rhs.at(0,1) + at(2,2)*rhs.at(0,2);
+        at(1,2) = at(0,2)*rhs.at(1,0) + at(1,2)*rhs.at(1,1) + at(2,2)*rhs.at(1,2);
+        at(2,2) = at(0,2)*rhs.at(2,0) + at(1,2)*rhs.at(2,1) + at(2,2)*rhs.at(2,2);
+        return *this;
+    }
+
+    static Mat3d rotation(double alpha, double beta, double gamma);
+
+    static Mat3d rotationX(double phi) {
+        double vmat[9];
+        const double cosphi{cos(phi)};
+        const double sinphi{sin(phi)};
+        vmat[0] = 1; vmat[1] = 0;      vmat[2] = 0;
+        vmat[3] = 0; vmat[4] = cosphi; vmat[5] = -sinphi;
+        vmat[6] = 0; vmat[7] = sinphi; vmat[8] = cosphi;
+        return Mat3d{vmat};
+    }
+
+    static Mat3d rotationY(double phi) {
+        double vmat[9];
+        const double cosphi{cos(phi)};
+        const double sinphi{sin(phi)};
+        vmat[0] = cosphi;  vmat[1] = 0; vmat[2] = sinphi;
+        vmat[3] = 0;       vmat[4] = 1; vmat[5] = 0;
+        vmat[6] = -sinphi; vmat[7] = 0; vmat[8] = cosphi;
+        return Mat3d{vmat};
+    }
+
+    static Mat3d rotationZ(double phi) {
+        double vmat[9];
+        const double cosphi{cos(phi)};
+        const double sinphi{sin(phi)};
+        vmat[0] = cosphi;  vmat[1] = -sinphi; vmat[2] = 0;
+        vmat[3] = sinphi;  vmat[4] = cosphi;  vmat[5] = 0;
+        vmat[6] = 0;       vmat[7] = 0;       vmat[8] = 1;
+        return Mat3d{vmat};
+    }
+};
+
+Mat3d operator*(Mat3d lhs, const Mat3d& rhs) {
+    return lhs *= rhs;
+}
+
+Mat3d Mat3d::rotation(double alpha, double beta, double gamma) {
+    return Mat3d::rotationZ(gamma) * Mat3d::rotationY(beta) * Mat3d::rotationX(alpha);
+}
+
+ostream& operator<<(ostream& os, const Mat3d& mat) {
+    for(int n=0; n<mat.length()-1; ++n) {
+        cout << mat[n] << " ";
+    }
+    cout << mat[mat.length()-1];
+    return os;
+}
 
 /** 3D vector in cartesian space.
  *
@@ -135,6 +240,13 @@ struct Vec3d {
         x *= val;
         y *= val;
         z *= val;
+        return *this;
+    }
+
+    Vec3d& operator*=(const Mat3d& mat) {
+        x = x*mat.at(0,0) + y*mat.at(1,0) + z*mat.at(2, 0);
+        y = x*mat.at(0,1) + y*mat.at(1,1) + z*mat.at(2, 1);
+        z = x*mat.at(0,2) + y*mat.at(1,2) + z*mat.at(2, 2);
         return *this;
     }
 
@@ -214,6 +326,10 @@ Vec3d operator*(Vec3d lhs, const double val) {
 
 double dotProduct(const Vec3d& v1, const Vec3d& v2) {
     return v1.dotProduct(v2);
+}
+
+Vec3d operator*(Vec3d lhs, const Mat3d& rhs) {
+    return lhs *= rhs;
 }
 
 
@@ -748,20 +864,56 @@ struct Light {
 };
 
 
+struct Camera {
+    Vec3d eye;  // Camera position
+    Vec3d up;   // up direction (usually [0,1,0])
+    Vec3d right;
+    Vec3d at;   // Look at direction
+    double aspectRatio;
+    double fov;     // field of view
+    unsigned int imWidth;
+    unsigned int imHeight;
+
+    Camera(const Vec3d& eye, const Vec3d& up, const Vec3d& at, double aspectRatio, double fov, unsigned int imWidth,
+           unsigned int imHeight) : eye(eye), up(up), at(at), right(cross_product(at, up)), aspectRatio(aspectRatio), fov(fov), imWidth(imWidth),
+                                imHeight(imHeight) {}
+
+    Camera(double aspectRatio, double fov, unsigned int imWidth, unsigned int imHeight) :
+            eye(Vec3d{0,0,0}), up(Vec3d{0,1,0}), at(Vec3d{0,0,-1}), right(cross_product(at, up)), aspectRatio(aspectRatio), fov(fov), imWidth(imWidth),
+                                  imHeight(imHeight) {}
+
+    Ray getPrimRay(unsigned int x, unsigned int y) const {
+        const double px_ndc = (x + 0.5) / imWidth;
+        const double py_ndc = (y + 0.5) / imHeight;
+        const double cam_x = (2 * px_ndc - 1) * aspectRatio * tan(deg2rad(fov) / 2);
+        const double cam_y = (1 - 2 * py_ndc) * tan(deg2rad(fov) / 2);
+        Vec3d camDir{cam_x, cam_y, 0};
+        camDir = right * cam_x + up * cam_y + at;
+        camDir.normalize();
+
+        return Ray{eye, camDir};
+    }
+
+    Camera& rotate(double alpha, double beta, double gamma) {
+        const Mat3d rot = Mat3d::rotation(alpha, beta, gamma);
+        up *= rot;
+        up.normalize();
+        at *= rot;
+        at.normalize();
+        right = cross_product(at, up);
+        return *this;
+    }
+
+    Camera& move(const Vec3d& trans) {
+        eye += trans;
+        return *this;
+    }
+};
+
 ostream&
 operator<<(ostream& os, const Color& c) {
     os << c.r << " " << c.g << " " << c.b << " ";
     return os;
-}
-
-
-/** Converts angle in degree into rad.
- *
- * @param ang angle in degree
- * @return angle in rad
- */
-double deg2rad(double ang) {
-    return ang * M_PI / 180;
 }
 
 
@@ -1024,22 +1176,17 @@ Color
 }
 
 void
-render(ImageType* img, unsigned int x_start, unsigned int y_start, unsigned int cH, unsigned int cW, const unsigned int H, const unsigned int W,
-       const double ASPECT_RATIO, const double FOV, const Vec3d& origin, const vector<shared_ptr<Object>>& objects,
+render(ImageType* img, unsigned int x_start, unsigned int y_start, unsigned int cH, unsigned int cW, const Camera& camera, const vector<shared_ptr<Object>>& objects,
        const vector<Light>& lights, const Color& background, unsigned int& finPix, unsigned int& sumPix) {
     sumPix = cH*cW;
     finPix = 0;
+    const unsigned int W{camera.imWidth};
+    const unsigned int H{camera.imHeight};
 
     for (unsigned int y = y_start; y < cH+y_start; ++y) {
         ImageType* img_ptr{img + 3 * (y*W + x_start)};
         for (unsigned int x = x_start; x < cW+x_start; ++x) {
-            const double px_ndc = (x + 0.5) / W;
-            const double py_ndc = (y + 0.5) / H;
-            const double cam_x = (2 * px_ndc - 1) * ASPECT_RATIO * tan(deg2rad(FOV) / 2);
-            const double cam_y = (1 - 2 * py_ndc) * tan(deg2rad(FOV) / 2);
-            Vec3d d{cam_x, cam_y, -1};  // camera looks in negative z direction
-            d.normalize();
-            const Ray ray{origin, d};
+            const Ray ray = camera.getPrimRay(x, y);
 
             // trace primary/camera ray
             Color px_color{trace(objects, lights, background, ray, 0)};
@@ -1105,7 +1252,7 @@ create_scene(vector<shared_ptr<Object>>& objects, vector<Light>& lights) {
     shared_ptr<Model> bunny{Model::load_ply(bunny_path, Material(Color::gray(), 0.1, 0.05, 0.8))};
     bunny->scale(20);
     bunny->translate(Vec3d{-1, -2.75, -5});
-    objects.push_back(bunny);
+//    objects.push_back(bunny);
 
 
 //    string draon_res4_path{mesh_root+"dragon_recon/dragon_vrip_res4.ply"};
@@ -1178,6 +1325,10 @@ main(int argc, char** argv) {
     constexpr double FOV = 60;
 
     Color background{0, 0.5, 0.5};
+    Camera camera{Vec3d{0,0,0}, Vec3d{0,1,0}, Vec3d{0,0,-1}, ASPECT_RATIO, FOV, imWidth, imHeight};
+    camera.rotate(M_PI/16,M_PI/16,M_PI/16);
+//    camera.rotate(0,0,0);
+    camera.move(Vec3d{0,0,-2});
 
     vector<shared_ptr<Object>> objects;
     vector<Light> lights;
@@ -1206,7 +1357,7 @@ main(int argc, char** argv) {
     unsigned int ctr{0};
     for (unsigned int n=0; n<num_threads-1; ++n) {
         cout << "... starting thread " << n << endl;
-        threads[n] = thread{render, img_ptr, x_start, y_start, tileHeight, tileWidth, imHeight, imWidth, ASPECT_RATIO, FOV, origin, objects,
+        threads[n] = thread{render, img_ptr, x_start, y_start, tileHeight, tileWidth, camera, objects,
          lights, background, std::ref(finPix[ctr]), std::ref(sumPix[ctr])};
         colorize_image_tile(img, ctr++, x_start, y_start, tileWidth, tileHeight);
         x_start += tileWidth;
@@ -1222,7 +1373,7 @@ main(int argc, char** argv) {
 
     // main thread does the rest
     colorize_image_tile(img, ctr, x_start, y_start, tileWidth, tileHeight);
-    render(img_ptr, x_start, y_start, tileHeight, tileWidth, imHeight, imWidth, ASPECT_RATIO, FOV, origin, objects, lights, background, finPix[ctr], sumPix[ctr]);
+    render(img_ptr, x_start, y_start, tileHeight, tileWidth, camera, objects, lights, background, finPix[ctr], sumPix[ctr]);
 
     // wait for other threads to finish
     for (unsigned int n=0; n<num_threads-1; ++n) {
