@@ -685,6 +685,13 @@ struct Triangle : public Object {
         v2 += v;
         return *this;
     }
+
+    Triangle& operator*=(const Mat3d& mat) {
+        v0 *= mat;
+        v1 *= mat;
+        v2 *= mat;
+        return *this;
+    }
 };
 
 Triangle operator+(Triangle lhs, const double t) {
@@ -792,17 +799,36 @@ struct Model : Object {
     }
 
     Model& translate(const Vec3d& t) {
-        for (auto& f : faces) {
-            f += t;
-        }
-        return *this;
+        return *this += t;
     }
 
     Vec3d getNormal(const Vec3d& vec) const override {
         return Vec3d{};     // fixme: currently broken
     }
 
+    Model& operator*=(const Mat3d& mat) {
+        for (auto& f : faces) {
+            f *= mat;
+        }
+        return *this;
+    }
+
+    Model& operator+=(const Vec3d& rhs) {
+        for (auto& f : faces) {
+            f += rhs;
+        }
+        return *this;
+    }
+
 };
+
+Model operator+(Model lhs, const Vec3d& rhs) {
+    return lhs += rhs;
+}
+
+Model operator*(Model lhs, const Mat3d& rhs) {
+    return lhs *= rhs;
+}
 
 
 /** The most common object to be rendered in a raytracer
@@ -1211,15 +1237,17 @@ colorize_image_tile(cv::Mat img, int num, int x_start, int y_start, int pW, int 
                                    cv::Scalar{255, 0, 0},
                                    cv::Scalar{255, 255, 0},
                                    cv::Scalar{255, 0, 255},
+                                   cv::Scalar{0,255,255},
                                    cv::Scalar{125, 125, 125},
                                    cv::Scalar{0, 125, 255},
+                                   cv::Scalar{125,255,255},
                                    cv::Scalar{125, 255, 0},
                                    cv::Scalar{255, 125, 0},
                                    cv::Scalar{255, 255, 125},
                                    cv::Scalar{255, 125, 255}};
     // color each part differently
     cv::Mat tile{img(cv::Rect{x_start, y_start, pW, pH})};
-    tile = bgColors[num]*0.2;
+    tile = bgColors[num%13]*0.3;
     const cv::Size textSize{cv::getTextSize(text, fontFace, fontScale, thickness, &baseline)};
     cv::putText(tile, text, cv::Point{pW / 2 - textSize.width/2, pH / 2}, fontFace, fontScale, cv::Scalar::all(255), thickness);
 }
@@ -1323,9 +1351,9 @@ main(int argc, char** argv) {
 
     Color background{0, 0.5, 0.5};
     Camera camera{Vec3d{0,0,0}, Vec3d{0,1,0}, Vec3d{0,0,-1}, ASPECT_RATIO, FOV, imWidth, imHeight};
-    camera.rotate(M_PI/16,M_PI/16,M_PI/16);
+    camera.rotate(0,0,M_PI/16);
 //    camera.rotate(0,0,0);
-    camera.move(Vec3d{0,0,-2});
+    camera.move(Vec3d{-1,0,-0.5});
 
     vector<shared_ptr<Object>> objects;
     vector<Light> lights;
