@@ -139,7 +139,7 @@ struct Mat3d {
         return *this;
     }
 
-    static Mat3d rotation(double alpha, double beta, double gamma);
+    static Mat3d rotation(double phiX, double phiY, double phiZ);
 
     static Mat3d rotationX(double phi) {
         double vmat[9];
@@ -176,8 +176,8 @@ Mat3d operator*(Mat3d lhs, const Mat3d& rhs) {
     return lhs *= rhs;
 }
 
-Mat3d Mat3d::rotation(double alpha, double beta, double gamma) {
-    return Mat3d::rotationZ(gamma) * Mat3d::rotationY(beta) * Mat3d::rotationX(alpha);
+Mat3d Mat3d::rotation(double phiX, double phiY, double phiZ) {
+    return Mat3d::rotationZ(phiZ) * Mat3d::rotationY(phiY) * Mat3d::rotationX(phiX);
 }
 
 ostream& operator<<(ostream& os, const Mat3d& mat) {
@@ -437,6 +437,10 @@ struct Color {
         return Color(0.75);
     }
 
+    static Color yellow() {
+        return Color(1,1,0);
+    }
+
 };
 
 Color operator/(Color lhs, const double d) {
@@ -486,8 +490,10 @@ struct Material {
     double ks;  // specular reflectance
     double specRefExp; // specular-reflection exponent
 
-    Material(const Color& color, double ka=0.2, double kd=0.7, double ks=0.2, double specRefExp=8)
-            : color(color), ka(ka), kd(kd), ks(ks), specRefExp(specRefExp) {}
+    double kr;  // reflectance coefficient
+
+    Material(const Color& color, double ka=0.2, double kd=0.7, double ks=0.2, double kr=0, double specRefExp=8)
+            : color(color), ka(ka), kd(kd), ks(ks), specRefExp(specRefExp), kr(kr) {}
     Material() : color{} {}
 };
 
@@ -1004,6 +1010,7 @@ create_box(vector<shared_ptr<Object>>& objects) {
     mat.ks = 0.4;
     mat.ka = 0.2;
     mat.kd = 0.5;
+    mat.kr = 0.1;
     vector<Triangle> triangles;
 
 
@@ -1187,7 +1194,7 @@ Color
             const Vec3d invDir{-ray.direction};
             const Vec3d reflectRay{hitNormal * 2 * dotProduct(hitNormal,invDir) - invDir};
             const Color tcolor = trace(objects, lights, background, Ray{hitPt + hitNormal * bias, reflectRay}, itr) / (double)(itr);
-            color += cmat.ks * tcolor;
+            color += cmat.kr * tcolor;
             color.clamp(0, 1);
         }
 
@@ -1261,23 +1268,26 @@ create_scene(vector<shared_ptr<Object>>& objects, vector<Light>& lights) {
 //    lights.emplace_back(Light{Vec3d{5, -5, -2}, Color::white()*0.5});
 //    lights.emplace_back(Light{Vec{-30,-20,1}});
 
-    objects.push_back(make_shared<Sphere>(Vec3d{0, 0, -8}, 1, Material(Color::red(), 0, 0, 1, 16)));
+    objects.push_back(make_shared<Sphere>(Vec3d{0, 0, -8}, 1, Material(Color::red(), 0, 0, 0, 1)));
 //    objects.push_back(make_shared<Sphere>(Vec{10,0,-20}, 5, scolor));
     objects.push_back(make_shared<Sphere>(Vec3d{2, 0.25, -8}, 0.75, Material{Color{1, 1, 0}, 0.2, 0.7, 0}));
 
     objects.push_back(make_shared<Sphere>(Vec3d{-1, -1, -6}, 0.5, Color::blue()));
-    objects.push_back(make_shared<Sphere>(Vec3d{80, -6, -150}, 5, Color{0, 0, 1}));
-    objects.push_back(make_shared<Sphere>(Vec3d{-2.5, 2, -5}, 1, Color{1, 0, 1}));
+//    objects.push_back(make_shared<Sphere>(Vec3d{80, -6, -150}, 5, Color{0, 0, 1}));
+    objects.push_back(make_shared<Sphere>(Vec3d{-2.5, 2, -5}, 1, Material{Color{1, 0, 1}, 0.2, 0.5, 0.7}));
 
     create_box(objects);
     const string mesh_root{"/home/chris/shared/github/chris/raytracer/data/3d_meshes/"};
     string bunny_res4_path{mesh_root+"bunny/reconstruction/bun_zipper_res4.ply"};
     string bunny_res2_path{mesh_root+"bunny/reconstruction/bun_zipper_res2.ply"};
     string bunny_path{mesh_root+"bunny/reconstruction/bun_zipper.ply"};
-    shared_ptr<Model> bunny{Model::load_ply(bunny_path, Material(Color::gray(), 0.1, 0.05, 0.8))};
+    shared_ptr<Model> bunny{Model::load_ply(bunny_path, Material(Color::white(), 0.2, 0.5, 0.8, 0.2))};
+    *bunny *= Mat3d::rotation(M_PI/8, M_PI/6, 0);
+//    *bunny *= Mat3d::rotationX(M_PI/6);
+//    *bunny *= Mat3d::rotationY(M_PI/4);
     bunny->scale(20);
-    bunny->translate(Vec3d{-1, -2.75, -5});
-//    objects.push_back(bunny);
+    *bunny += Vec3d{-1.5, -2.75, -5.5};
+    objects.push_back(bunny);
 
 
 //    string draon_res4_path{mesh_root+"dragon_recon/dragon_vrip_res4.ply"};
