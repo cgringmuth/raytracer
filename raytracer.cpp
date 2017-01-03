@@ -21,7 +21,7 @@
 
 /**
  * TODOs
- * - todo: Add material with different reflection models (diffuse, specular, refraction etc.)
+ * - todo: Add material with different reflection models (refraction etc.)
  * - todo: Loading scene from file (xml, YAML etc.) -> I would prefer yaml
  * - todo: Implement anti-aliasing
  * - todo: Soft-shadows
@@ -490,11 +490,33 @@ struct Material {
     double ks;  // specular reflectance
     double specRefExp; // specular-reflection exponent
 
+    bool reflective;
     double kr;  // reflectance coefficient
 
-    Material(const Color& color, double ka=0.2, double kd=0.7, double ks=0.2, double kr=0, double specRefExp=8)
-            : color(color), ka(ka), kd(kd), ks(ks), specRefExp(specRefExp), kr(kr) {}
-    Material() : color{} {}
+    bool refractive;
+    /** The refraction coefficient. This is the coefficient for this material
+     * src: https://graphics.stanford.edu/courses/cs148-10-summer/docs/2006--degreve--reflection_refraction.pdf
+     *
+     * Snell's law: n1*sin(phi1) = n2*sin(phi2)
+     *
+     * NOTE: It is allways assumed that ray go from medium (n1) to medium (n2).
+     *
+     * sin(phi1)   n1
+     * --------- = -- = n12
+     * sin(phi2)   n2
+     *
+     * Assuming air has n=1.0
+     */
+    double refractiveIdx;
+
+    Material(const Color& color, double ka=0.2, double kd=0.7, double ks=0.2, double kr=0, double specRefExp=8,
+             double refractiveIdx=0, bool reflective=false, bool refractive=false)
+            : color(color), ka(ka), kd(kd), ks(ks), specRefExp(specRefExp), kr(kr), refractiveIdx(refractiveIdx)
+            , reflective(reflective), refractive(refractive) {}
+    Material(double ka=0.2, double kd=0.7, double ks=0.2, double kr=0, double specRefExp=8, double refractiveIdx=0,
+             bool reflective=false, bool refractive=false)
+            : color{}, ka(ka), kd(kd), ks(ks), specRefExp(specRefExp), kr(kr), refractiveIdx(refractiveIdx),
+              reflective(reflective), refractive(refractive) {}
 };
 
 
@@ -1135,7 +1157,7 @@ Color
       const Ray& ray,
       int itr) {
     double dist{::std::numeric_limits<double>::max()}, tmpdist;
-    const double bias{0.0001};   // bias origin of reflective ray a little into normal direction
+    const double bias{0.0001};   // bias origin of reflective/refractive/shadow ray a little into normal direction to adjust for precision problem
     Color color{background};
     Vec3d tmpnormal, hitNormal;
     Object* cur_obj{nullptr};
@@ -1153,7 +1175,7 @@ Color
 
     if (cur_obj != nullptr) {
         color = Color(0.0);
-        const Material& cmat = cur_obj->material;
+        const Material& curMaterial = cur_obj->material;
         const Vec3d hitPt{ray.getPoint(dist)};
 
         for (const auto& l : lights) {
@@ -1179,26 +1201,54 @@ Color
             // diffuse shading
             const double cosPhi{
                     max(hitNormal.dotProduct(lv), 0.0)};    // todo: check why we have to clip negative values
-            color += cmat.color * l.color * cmat.kd * (cosPhi / (ldist * ldist));    // todo: change color to diffuse color
+            color += curMaterial.color * l.color * curMaterial.kd * (cosPhi / (ldist * ldist));    // todo: change color to diffuse color
 
             // specular shading
             const Vec3d reflectRay{hitNormal * 2 * dotProduct(hitNormal,lv) - lv};
             const double cosAlpha{
                     max(reflectRay.dotProduct(lv), 0.0)};    // todo: check why we have to clip negative values
-            color += l.color * cmat.ks * (pow(cosAlpha, cmat.specRefExp) / (ldist * ldist));     // todo: add reflective color here
+            color += l.color * curMaterial.ks * (pow(cosAlpha, curMaterial.specRefExp) / (ldist * ldist));     // todo: add reflective color here
             color.clamp(0, 1);
         }
 
+        ++itr;
         // reflective shading recursive tracing
-        if (++itr <= MAX_ITR) {
+        if (curMaterial.reflective && itr <= MAX_ITR) {
             const Vec3d invDir{-ray.direction};
-            const Vec3d reflectRay{hitNormal * 2 * dotProduct(hitNormal,invDir) - invDir};
-            const Color tcolor = trace(objects, lights, background, Ray{hitPt + hitNormal * bias, reflectRay}, itr) / (double)(itr);
-            color += cmat.kr * tcolor;
+            const Vec3d reflectDir{hitNormal * 2 * dotProduct(hitNormal,invDir) - invDir};
+            const Color colorReflective = trace(objects, lights, background, Ray{hitPt + hitNormal * bias, reflectDir}, itr) / (double)(itr);
+            color += curMaterial.kr * colorReflective;
+            color.clamp(0, 1);
+        }
+        // refractive shading recursive tracing
+        if (curMaterial.refractive && itr <= MAX_ITR) {
+            double cosIncedent{ray.direction.dotProduct(hitNormal)};     // is <0 if ray hits outside object hull (ray pointing towards object)
+            Vec3d refractNormal{hitNormal};
+            double n1, n2;  // refractive index we come from (n1) and go to (n2)
+            constexpr double REFRACTIVE_INDEX_AIR{1.0};
+            if (cosIncedent < 0.0) {
+                // ray from air to object
+                n1 = REFRACTIVE_INDEX_AIR;   // assuming air other medium
+                n2 = curMaterial.refractiveIdx;
+                cosIncedent = -cosIncedent;
+            } else {
+                // ray from object to air (inside)
+                n1 = curMaterial.refractiveIdx;
+                n2 = REFRACTIVE_INDEX_AIR;   // assuming air other medium
+                refractNormal = -refractNormal;
+            }
+            const double n{n1/n2};
+
+            double sinSqrPhit{std::min(n * n * (1 - cosIncedent * cosIncedent), 1.0)};    // if sinSqrPhit is greater it is not valid
+//            sinSqrPhit = std::max(sinSqrPhit, -1.0);
+            Vec3d refractDir{ray.direction * n + refractNormal * (n * cosIncedent - sqrt(1 - sinSqrPhit))};
+            refractDir.normalize();
+            const Color colorRefractive = trace(objects, lights, background, Ray{hitPt - refractNormal * bias, refractDir}, itr);
+            color += (1-curMaterial.kr) * colorRefractive;
             color.clamp(0, 1);
         }
 
-        color += cmat.color * cmat.ka;
+        color += curMaterial.color * curMaterial.ka;
         color.clamp(0, 1);
     }
 
@@ -1268,11 +1318,10 @@ create_scene(vector<shared_ptr<Object>>& objects, vector<Light>& lights) {
 //    lights.emplace_back(Light{Vec3d{5, -5, -2}, Color::white()*0.5});
 //    lights.emplace_back(Light{Vec{-30,-20,1}});
 
-    objects.push_back(make_shared<Sphere>(Vec3d{0, 0, -8}, 1, Material(Color::red(), 0, 0, 0, 1)));
+    objects.push_back(make_shared<Sphere>(Vec3d{0, 0, -8}, 1, Material(Color::red(), 0, 0, 0, 1, 8, 0, true)));
 //    objects.push_back(make_shared<Sphere>(Vec{10,0,-20}, 5, scolor));
     objects.push_back(make_shared<Sphere>(Vec3d{2, 0.25, -8}, 0.75, Material{Color{1, 1, 0}, 0.2, 0.7, 0}));
-
-    objects.push_back(make_shared<Sphere>(Vec3d{-1, -1, -6}, 0.5, Color::blue()));
+    objects.push_back(make_shared<Sphere>(Vec3d{-0.5, -0.5, -6}, 0.5, Material(Color::blue(), 0, 0, 0, 0, 8, 1.5, true, true)));
 //    objects.push_back(make_shared<Sphere>(Vec3d{80, -6, -150}, 5, Color{0, 0, 1}));
     objects.push_back(make_shared<Sphere>(Vec3d{-2.5, 2, -5}, 1, Material{Color{1, 0, 1}, 0.2, 0.5, 0.7}));
 
@@ -1281,7 +1330,8 @@ create_scene(vector<shared_ptr<Object>>& objects, vector<Light>& lights) {
     string bunny_res4_path{mesh_root+"bunny/reconstruction/bun_zipper_res4.ply"};
     string bunny_res2_path{mesh_root+"bunny/reconstruction/bun_zipper_res2.ply"};
     string bunny_path{mesh_root+"bunny/reconstruction/bun_zipper.ply"};
-    shared_ptr<Model> bunny{Model::load_ply(bunny_path, Material(Color::white(), 0.2, 0.5, 0.8, 0.2))};
+//    shared_ptr<Model> bunny{Model::load_ply(bunny_path, Material(Color::white(), 0.2, 0.5, 0.8, 0.2))};
+    shared_ptr<Model> bunny{Model::load_ply(bunny_res4_path, Material(Color::white(), 0, 0, 0, 0, 8, 1.5, false, true))};     // glass bunny
     *bunny *= Mat3d::rotation(M_PI/8, M_PI/6, 0);
 //    *bunny *= Mat3d::rotationX(M_PI/6);
 //    *bunny *= Mat3d::rotationY(M_PI/4);
