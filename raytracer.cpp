@@ -13,14 +13,18 @@
 
 #include <opencv2/opencv.hpp>
 
-// url: https://www.scratchapixel.com/lessons/3d-basic-rendering/introduction-to-ray-tracing
-// operator overloading: http://stackoverflow.com/a/4421719/1959528
-// 3D meshes: https://graphics.stanford.edu/data/3Dscanrep/
-// Idea: Create the cornell box as test scene: https://en.wikipedia.org/wiki/Cornell_box
+
+/** Some good resources ray tracing
+ * Lecture about ray tracing: http://www.cs.uu.nl/docs/vakken/magr/2015-2016/index.html
+ * url: https://www.scratchapixel.com/lessons/3d-basic-rendering/introduction-to-ray-tracing
+ * operator overloading: http://stackoverflow.com/a/4421719/1959528
+ * 3D meshes: https://graphics.stanford.edu/data/3Dscanrep/
+ * Idea: Create the cornell box as test scene: https://en.wikipedia.org/wiki/Cornell_box
+ */
 
 
-/**
- * TODOs
+
+/** TODOs
  * - todo: Add material with different reflection models (refraction etc.)
  * - todo: Loading scene from file (xml, YAML etc.) -> I would prefer yaml
  * - todo: Implement anti-aliasing
@@ -33,6 +37,7 @@
  * - todo: optimization: bounding box with fast intersection calculation around object (bounding box: sphere, box etc.)
  * - todo: create scene to hold primitives, lights etc.
  * - todo: restructure project
+ * - todo: motion blur
  */
 
 
@@ -81,7 +86,7 @@ const string winName{"image"};
 typedef unsigned char ImageType;
 Timer timer;
 constexpr double EPS{0.000001};
-constexpr int MAX_ITR{5};
+constexpr int MAX_DEPTH{10};
 
 
 /** Converts angle in degree into rad.
@@ -508,27 +513,28 @@ struct Material {
      * Assuming air has n=1.0
      */
     double refractiveIdx;
+    double kt;  // transimission coefficient (the amount of light which it can pass through object)
 
-    Material(const Color& color, double ka=0.2, double kd=0.7, double ks=0.2, double kr=0, double specRefExp=8,
+    Material(const Color& color, double ka=0.2, double kd=0.7, double ks=0.2, double kr=0, double kt=0, double specRefExp=8,
              double refractiveIdx=0, bool reflective=false, bool refractive=false)
             : color(color), ka(ka), kd(kd), ks(ks), specRefExp(specRefExp), kr(kr), refractiveIdx(refractiveIdx)
-            , reflective(reflective), refractive(refractive) {}
-    Material(double ka=0.2, double kd=0.7, double ks=0.2, double kr=0, double specRefExp=8, double refractiveIdx=0,
+            , reflective(reflective), refractive(refractive), kt{kt} {}
+    Material(double ka=0.2, double kd=0.7, double ks=0.2, double kr=0, double kt=0, double specRefExp=8, double refractiveIdx=0,
              bool reflective=false, bool refractive=false)
             : color{}, ka(ka), kd(kd), ks(ks), specRefExp(specRefExp), kr(kr), refractiveIdx(refractiveIdx),
-              reflective(reflective), refractive(refractive) {}
+              reflective(reflective), refractive(refractive), kt{kt} {}
 };
 
 
 /** Generic base class for all objects which shall be rendered
  *
  */
-struct Object {
+struct Primitive {
     Material material;
 
-    Object(const Color& color) : material(color) {}
-    Object(const Material& material) : material(material) {}
-    Object() : material{} {}
+    Primitive(const Color& color) : material(color) {}
+    Primitive(const Material& material) : material(material) {}
+    Primitive() : material{} {}
 
     virtual bool intersect(const Ray& ray, double& dist, Vec3d& normal) const = 0;
 
@@ -537,11 +543,11 @@ struct Object {
 };
 
 
-struct Plane : public Object {
+struct Plane : public Primitive {
     double a, b, c, d;  // implicit description: ax + by + cz + d = 0
 
     Plane(double a, double b, double c, double d, const Color& color)
-            : a(a), b(b), c(c), d(d), Object(color) {
+            : a(a), b(b), c(c), d(d), Primitive(color) {
         // normalize normal vector
         Vec3d pn{a, b, c};
         pn.normalize();
@@ -551,7 +557,7 @@ struct Plane : public Object {
     }
 
     Plane(double a, double b, double c, double d, const Material& material)
-            : a(a), b(b), c(c), d(d), Object(material) {
+            : a(a), b(b), c(c), d(d), Primitive(material) {
         // normalize normal vector
         Vec3d pn{a, b, c};
         pn.normalize();
@@ -561,7 +567,7 @@ struct Plane : public Object {
     }
 
 
-    Plane(Vec3d normal, double dist, const Color& color) : d{dist}, Object{color} {
+    Plane(Vec3d normal, double dist, const Color& color) : d{dist}, Primitive{color} {
         normal.normalize(); // make sure normal is normalized
         a = normal[0];
         b = normal[1];
@@ -589,18 +595,18 @@ struct Plane : public Object {
     }
 };
 
-struct Triangle : public Object {
+struct Triangle : public Primitive {
     Vec3d v0, v1, v2, normal;
 
     Triangle(const Vec3d& v0, const Vec3d& v1, const Vec3d& v2, const Color& color)
-            : v0{v0}, v1{v1}, v2{v2}, Object{color}, normal{calcNormal()} { }
+            : v0{v0}, v1{v1}, v2{v2}, Primitive{color}, normal{calcNormal()} { }
     Triangle(const Vec3d& v0, const Vec3d& v1, const Vec3d& v2, const Material material=Material{})
-            : v0{v0}, v1{v1}, v2{v2}, Object{material}, normal{calcNormal()} {}
+            : v0{v0}, v1{v1}, v2{v2}, Primitive{material}, normal{calcNormal()} {}
 
     virtual bool intersect(const Ray& ray, double& dist, Vec3d& normal) const override {
-        // todo: improve performance (http://www.cs.virginia.edu/%7Egfx/Courses/2003/ImageSynthesis/papers/Acceleration/Fast%20MinimumStorage%20RayTriangle%20Intersection.pdf)
         normal = this->normal;
 #if MT_TRIANGLE_INTERSECT==1
+        // src: http://www.cs.virginia.edu/%7Egfx/Courses/2003/ImageSynthesis/papers/Acceleration/Fast%20MinimumStorage%20RayTriangle%20Intersection.pdf
         // Any point on the triangle can be described by (in the uv-space)
         // P = v0 + u(v1-v0) + v(v2-v0)
         // P can also be described by ray equation (when hit triangle)
@@ -730,13 +736,13 @@ Triangle operator+(Triangle lhs, const Vec3d& v) {
     return lhs += v;
 }
 
-struct Model : Object {
+struct Model : Primitive {
     vector<Triangle> faces;
 
-    Model(const Color& color, const vector<Triangle>& faces) : Object(color), faces(faces) {}
-    Model(const Material& material, const vector<Triangle>& faces) : Object(material), faces(faces) {}
-    Model(const Color& color) : Object(color) {}
-    Model(const Material& material) : Object(material) {}
+    Model(const Color& color, const vector<Triangle>& faces) : Primitive(color), faces(faces) {}
+    Model(const Material& material, const vector<Triangle>& faces) : Primitive(material), faces(faces) {}
+    Model(const Color& color) : Primitive(color) {}
+    Model(const Material& material) : Primitive(material) {}
 
     Model() {}
 
@@ -862,13 +868,13 @@ Model operator*(Model lhs, const Mat3d& rhs) {
 /** The most common object to be rendered in a raytracer
  *
  */
-struct Sphere : public Object {
+struct Sphere : public Primitive {
     // define location + radius
     Vec3d center;
     double radius;
 
-    Sphere(const Vec3d& c, double r, const Color& color) : center{c}, radius{r}, Object{color} {}
-    Sphere(const Vec3d& c, double r, const Material& material) : center{c}, radius{r}, Object{material} {}
+    Sphere(const Vec3d& c, double r, const Color& color) : center{c}, radius{r}, Primitive{color} {}
+    Sphere(const Vec3d& c, double r, const Material& material) : center{c}, radius{r}, Primitive{material} {}
 
     // get intersection with ray: refer: https://en.wikipedia.org/wiki/Line%E2%80%93sphere_intersection
     // more details: https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rendering-simple-shapes/ray-sphere-intersection
@@ -994,7 +1000,7 @@ void check_op_overloading() {
 
 
 void
-create_box(vector<shared_ptr<Object>>& objects) {
+create_box(vector<shared_ptr<Primitive>>& objects) {
     const int y_offset{-3};
     const int x_offset{2};
     const int z_offset{-9};
@@ -1150,17 +1156,35 @@ preview(cv::Mat& img, unsigned int* finPixArr, unsigned int* sumPixArr, int numP
     }
 }
 
+
+double calcDist(const vector<shared_ptr<Primitive>>& objects,
+                const Ray& ray,
+                Vec3d& hitNormal
+) {
+    double dist{::std::numeric_limits<double>::max()}, tmpdist;
+    Vec3d tmpnormal;
+    // get closest intersection
+    for (const auto& o : objects) {
+        if (o->intersect(ray, tmpdist, tmpnormal) && tmpdist < dist) {
+            dist = tmpdist;
+            hitNormal = tmpnormal;
+        }
+
+    }
+    return dist;
+}
+
 Color
- trace(const vector<shared_ptr<Object>>& objects,
+ trace(const vector<shared_ptr<Primitive>>& objects,
       const vector<Light>& lights,
       const Color& background,
       const Ray& ray,
-      int itr) {
+      int depth) {
     double dist{::std::numeric_limits<double>::max()}, tmpdist;
     const double bias{0.0001};   // bias origin of reflective/refractive/shadow ray a little into normal direction to adjust for precision problem
     Color color{background};
     Vec3d tmpnormal, hitNormal;
-    Object* cur_obj{nullptr};
+    Primitive* cur_obj{nullptr};
 
     // get closest intersection
     for (const auto& o : objects) {
@@ -1178,6 +1202,7 @@ Color
         const Material& curMaterial = cur_obj->material;
         const Vec3d hitPt{ray.getPoint(dist)};
 
+        // shade pixel
         for (const auto& l : lights) {
             Vec3d lv{l.pos - hitPt};
             const double ldist{lv.length()};
@@ -1211,21 +1236,18 @@ Color
             color.clamp(0, 1);
         }
 
-        ++itr;
-        // reflective shading recursive tracing
-        if (curMaterial.reflective && itr <= MAX_ITR) {
-            const Vec3d invDir{-ray.direction};
-            const Vec3d reflectDir{hitNormal * 2 * dotProduct(hitNormal,invDir) - invDir};
-            const Color colorReflective = trace(objects, lights, background, Ray{hitPt + hitNormal * bias, reflectDir}, itr) / (double)(itr);
-            color += curMaterial.kr * colorReflective;
-            color.clamp(0, 1);
-        }
-        // refractive shading recursive tracing
-        if (curMaterial.refractive && itr <= MAX_ITR) {
-            double cosIncedent{ray.direction.dotProduct(hitNormal)};     // is <0 if ray hits outside object hull (ray pointing towards object)
-            Vec3d refractNormal{hitNormal};
-            double n1, n2;  // refractive index we come from (n1) and go to (n2)
-            constexpr double REFRACTIVE_INDEX_AIR{1.0};
+        ++depth;
+
+
+        constexpr double REFRACTIVE_INDEX_AIR{1.0};
+        Vec3d refractNormal{hitNormal};
+        double cosIncedent, cosTransmission, sinSqrPhit;
+        double n1, n2, n;  // refractive index we come from (n1) and go to (n2)
+        double rCoef;    // reflective/refractive coefficient based on angle
+
+        // frensel equation
+        if ((curMaterial.reflective || curMaterial.refractive) && !depth<=MAX_DEPTH) {
+            cosIncedent = ray.direction.dotProduct(hitNormal);     // is <0 if ray hits outside object hull (ray pointing towards object)
             if (cosIncedent < 0.0) {
                 // ray from air to object
                 n1 = REFRACTIVE_INDEX_AIR;   // assuming air other medium
@@ -1237,18 +1259,40 @@ Color
                 n2 = REFRACTIVE_INDEX_AIR;   // assuming air other medium
                 refractNormal = -refractNormal;
             }
-            const double n{n1/n2};
+            n = n1/n2;
+            sinSqrPhit = n * n * (1 - cosIncedent * cosIncedent);    // if sinSqrPhit is greater than 1 it is not valid
+            if (sinSqrPhit <= 1) {
+                cosTransmission = sqrt(1-sinSqrPhit);
+                const double Rorth{(n1*cosIncedent - n2*cosTransmission)/(n1*cosIncedent + n2*cosTransmission)};
+                const double Rpar{ (n2*cosIncedent - n1*cosTransmission)/(n2*cosIncedent + n1*cosTransmission)};
+                rCoef = (Rorth*Rorth + Rpar*Rpar) / 2;
+            } else {
+                rCoef = 1;
+            }
 
-            double sinSqrPhit{std::min(n * n * (1 - cosIncedent * cosIncedent), 1.0)};    // if sinSqrPhit is greater it is not valid
-//            sinSqrPhit = std::max(sinSqrPhit, -1.0);
-            Vec3d refractDir{ray.direction * n + refractNormal * (n * cosIncedent - sqrt(1 - sinSqrPhit))};
-            refractDir.normalize();
-            const Color colorRefractive = trace(objects, lights, background, Ray{hitPt - refractNormal * bias, refractDir}, itr);
-            color += (1-curMaterial.kr) * colorRefractive;
-            color.clamp(0, 1);
+        }
+
+        // reflective shading recursive tracing
+        Color colorReflect{0};
+        if (curMaterial.reflective && depth <= MAX_DEPTH) {
+            const Vec3d reflectDir{-hitNormal * 2 * dotProduct(hitNormal,ray.direction) + ray.direction};
+            colorReflect = curMaterial.kr * trace(objects, lights, background, Ray{hitPt + hitNormal * bias, reflectDir}, depth) / (double)(depth);
+        }
+        // refractive shading recursive tracing
+        Color colorRefract{0};
+        if (curMaterial.refractive && depth <= MAX_DEPTH && sinSqrPhit <= 1) {
+            // if sinSqrPhit > 1.0 we cannot find a transmission vector -> we have 'total internal reflection' (TRI) or critical angle
+                // todo: handle tri and critical angle
+            const Vec3d refractDir{ray.direction * n + refractNormal * (n * cosIncedent - cosTransmission)};
+            colorRefract = curMaterial.kt * trace(objects, lights, background, Ray{hitPt - refractNormal * bias, refractDir}, depth);
         }
 
         color += curMaterial.color * curMaterial.ka;
+        if (curMaterial.refractive)
+            color += rCoef * colorReflect + (1-rCoef) * colorRefract;
+        else
+            color += colorReflect;
+
         color.clamp(0, 1);
     }
 
@@ -1256,7 +1300,7 @@ Color
 }
 
 void
-render(ImageType* img, unsigned int x_start, unsigned int y_start, unsigned int cH, unsigned int cW, const Camera& camera, const vector<shared_ptr<Object>>& objects,
+render(ImageType* img, unsigned int x_start, unsigned int y_start, unsigned int cH, unsigned int cW, const Camera& camera, const vector<shared_ptr<Primitive>>& objects,
        const vector<Light>& lights, const Color& background, unsigned int& finPix, unsigned int& sumPix) {
     sumPix = cH*cW;
     finPix = 0;
@@ -1270,6 +1314,7 @@ render(ImageType* img, unsigned int x_start, unsigned int y_start, unsigned int 
 
             // trace primary/camera ray
             Color px_color{trace(objects, lights, background, ray, 0)};
+//            Color px_color{calcDist(objects, ray)};
 
             // Using Opencv bgr
             *(img_ptr++) = (ImageType) (px_color.b * 255);
@@ -1311,18 +1356,16 @@ colorize_image_tile(cv::Mat img, int num, int x_start, int y_start, int pW, int 
 
 
 void
-create_scene(vector<shared_ptr<Object>>& objects, vector<Light>& lights) {
+create_scene(vector<shared_ptr<Primitive>>& objects, vector<Light>& lights) {
     lights.emplace_back(Light{Vec3d{0, 3, -7.5}, Color::white() * 3});
 //    lights.emplace_back(Light{Vec3d{0, 8, -9}, Color::white()*0.5});
     lights.emplace_back(Light{Vec3d{0, 0, -1}, Color::white() * 10});
 //    lights.emplace_back(Light{Vec3d{5, -5, -2}, Color::white()*0.5});
 //    lights.emplace_back(Light{Vec{-30,-20,1}});
 
-    objects.push_back(make_shared<Sphere>(Vec3d{0, 0, -8}, 1, Material(Color::red(), 0, 0, 0, 1, 8, 0, true)));
-//    objects.push_back(make_shared<Sphere>(Vec{10,0,-20}, 5, scolor));
+    objects.push_back(make_shared<Sphere>(Vec3d{0, 0, -8}, 1, Material(Color::red(), 0, 0, 0, 1, 1, 8, 0, true)));
     objects.push_back(make_shared<Sphere>(Vec3d{2, 0.25, -8}, 0.75, Material{Color{1, 1, 0}, 0.2, 0.7, 0}));
-    objects.push_back(make_shared<Sphere>(Vec3d{-0.5, -0.5, -6}, 0.5, Material(Color::blue(), 0, 0, 0, 0, 8, 1.5, true, true)));
-//    objects.push_back(make_shared<Sphere>(Vec3d{80, -6, -150}, 5, Color{0, 0, 1}));
+    objects.push_back(make_shared<Sphere>(Vec3d{0, 1, -3}, 0.5, Material(Color::blue(), 0, 0, 0, 0.99, 0.99, 8, 1.5, true, true)));
     objects.push_back(make_shared<Sphere>(Vec3d{-2.5, 2, -5}, 1, Material{Color{1, 0, 1}, 0.2, 0.5, 0.7}));
 
     create_box(objects);
@@ -1331,7 +1374,7 @@ create_scene(vector<shared_ptr<Object>>& objects, vector<Light>& lights) {
     string bunny_res2_path{mesh_root+"bunny/reconstruction/bun_zipper_res2.ply"};
     string bunny_path{mesh_root+"bunny/reconstruction/bun_zipper.ply"};
 //    shared_ptr<Model> bunny{Model::load_ply(bunny_path, Material(Color::white(), 0.2, 0.5, 0.8, 0.2))};
-    shared_ptr<Model> bunny{Model::load_ply(bunny_res4_path, Material(Color::white(), 0, 0, 0, 0, 8, 1.5, false, true))};     // glass bunny
+    shared_ptr<Model> bunny{Model::load_ply(bunny_path, Material(Color::white(), 0, 0, 0, 0.9, 0.9, 8, 1.5, true, true))};     // glass bunny
     *bunny *= Mat3d::rotation(M_PI/8, M_PI/6, 0);
 //    *bunny *= Mat3d::rotationX(M_PI/6);
 //    *bunny *= Mat3d::rotationY(M_PI/4);
@@ -1365,6 +1408,7 @@ create_scene(vector<shared_ptr<Object>>& objects, vector<Light>& lights) {
     // left
     objects.push_back(make_shared<Plane>(1, 0, 0, box_len, Color::red()));
     // right
+//    objects.push_back(make_shared<Plane>(-1, 0, 0, box_len, Material{Color::green(), 0,0,0,1,0,8, 0, true}));   // mirror
     objects.push_back(make_shared<Plane>(-1, 0, 0, box_len, Color::green()));
     // bottom
     objects.push_back(make_shared<Plane>(0, 1, 0, box_len, Color::blue()));
@@ -1415,7 +1459,7 @@ main(int argc, char** argv) {
 //    camera.rotate(0,0,0);
     camera.move(Vec3d{-1,0,-0.5});
 
-    vector<shared_ptr<Object>> objects;
+    vector<shared_ptr<Primitive>> objects;
     vector<Light> lights;
     create_scene(objects, lights);
 
