@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <iomanip>
 #include <thread>
+#include <mutex>
 #include <exception>
 #include <chrono>
 
@@ -87,6 +88,7 @@ typedef unsigned char ImageType;
 Timer timer;
 constexpr double EPS{0.000001};
 constexpr int MAX_DEPTH{10};
+mutex RENDER_MUTEX;
 
 
 /** Converts angle in degree into rad.
@@ -1096,7 +1098,7 @@ create_box(vector<shared_ptr<Primitive>>& objects) {
 
 
 void
-preview(cv::Mat& img, unsigned int* finPixArr, unsigned int* sumPixArr, int numProg, int delay = 1000)
+preview(cv::Mat& img, unsigned int& finPix, unsigned int sumPix, int delay = 1000)
 {
     int key;
     double progress, curElapsed, lastElapsed;
@@ -1108,12 +1110,11 @@ preview(cv::Mat& img, unsigned int* finPixArr, unsigned int* sumPixArr, int numP
         cv::Mat tmpimg{img.clone()};
         progress = 0;
         curFinPix = 0;
-        for (int n=0; n<numProg; ++n) {
-            curFinPix += finPixArr[n];
-            progress += (double)(finPixArr[n])/sumPixArr[n];
-        }
-        progress /= numProg;
-        progress *= 100;
+//        for (int n=0; n<numProg; ++n) {
+//            curFinPix += finPixArr[n];
+//            progress += (double)(finPixArr[n])/sumPixArr[n];
+//        }
+        progress = (float) finPix / sumPix * 100;
 
         curElapsed = timer.elapsed();
         const double pixPerSec{((double)(curFinPix - lastFinPix))/(curElapsed - lastElapsed)};
@@ -1301,9 +1302,7 @@ Color
 
 void
 render(ImageType* img, unsigned int x_start, unsigned int y_start, unsigned int cH, unsigned int cW, const Camera& camera, const vector<shared_ptr<Primitive>>& objects,
-       const vector<Light>& lights, const Color& background, unsigned int& finPix, unsigned int& sumPix) {
-    sumPix = cH*cW;
-    finPix = 0;
+       const vector<Light>& lights, const Color& background, unsigned int& finPix, unsigned int& thread_count) {
     const unsigned int W{camera.imWidth};
     const unsigned int H{camera.imHeight};
 
@@ -1321,8 +1320,13 @@ render(ImageType* img, unsigned int x_start, unsigned int y_start, unsigned int 
             *(img_ptr++) = (ImageType) (px_color.g * 255);
             *(img_ptr++) = (ImageType) (px_color.r * 255);
 
-            ++finPix;
+            ++finPix;   // todo: make this thread-safe and efficient
         }
+    }
+
+    {
+        lock_guard<mutex> guard(RENDER_MUTEX);
+        --thread_count;
     }
 }
 
@@ -1351,7 +1355,7 @@ colorize_image_tile(cv::Mat img, int num, int x_start, int y_start, int pW, int 
     cv::Mat tile{img(cv::Rect{x_start, y_start, pW, pH})};
     tile = bgColors[num%13]*0.3;
     const cv::Size textSize{cv::getTextSize(text, fontFace, fontScale, thickness, &baseline)};
-    cv::putText(tile, text, cv::Point{pW / 2 - textSize.width/2, pH / 2}, fontFace, fontScale, cv::Scalar::all(255), thickness);
+//    cv::putText(tile, text, cv::Point{pW / 2 - textSize.width/2, pH / 2}, fontFace, fontScale, cv::Scalar::all(255), thickness);
 }
 
 
@@ -1466,49 +1470,60 @@ main(int argc, char** argv) {
     const Vec3d origin{0, 0, 0};  // center of projection
 
     // 8 threads (7 child threads + 1 main thread)
-    const int num_threads{8};   // max: num available threads
-    unsigned int finPix[num_threads];
-    unsigned int sumPix[num_threads];
+    const int max_threads{8};   // max: num available threads
+    unsigned int finPix{0};
 
-    thread threads[num_threads-1];
+    vector<thread> threads;
 
     // split image into tiles (2x4)
-    const unsigned int nXTiles{2};
-    const unsigned int nYTiles{4};
+    const unsigned int nXTiles{20};
+    const unsigned int nYTiles{20};
     const unsigned int tileWidth{imWidth/nXTiles};
     const unsigned int tileHeight{imHeight/nYTiles};
 
     timer.reset();
+    // starting thread to show progress
+    thread thread_show{preview, std::ref(img), std::ref(finPix), imWidth*imHeight, 200};
 
     // start threads
     unsigned int x_start{0};
     unsigned int y_start{0};
     unsigned int ctr{0};
-    for (unsigned int n=0; n<num_threads-1; ++n) {
-        cout << "... starting thread " << n << endl;
-        threads[n] = thread{render, img_ptr, x_start, y_start, tileHeight, tileWidth, camera, objects,
-         lights, background, std::ref(finPix[ctr]), std::ref(sumPix[ctr])};
+    unsigned int thread_count{0};
+    while (true) {
+        cout << " ... starting thread: " << ctr << endl;
+        {
+            lock_guard<mutex> guard(RENDER_MUTEX);
+            threads.push_back(thread{render, img_ptr, x_start, y_start, tileHeight, tileWidth, std::ref(camera),
+                                           std::ref(objects),
+                                           lights, background,
+                                           std::ref(finPix),
+                                           std::ref(thread_count)});
+            ++thread_count;
+        }
         colorize_image_tile(img, ctr++, x_start, y_start, tileWidth, tileHeight);
         x_start += tileWidth;
         if (x_start >= imWidth) {
             x_start = 0;
             y_start += tileHeight;
+            if (y_start >= imHeight)
+                break;
+        }
+        // wait until new threads can be started
+        while (thread_count >= max_threads) {
+            this_thread::sleep_for(chrono::milliseconds(100));
         }
     }
 
-    // starting thread to show progress
-    thread thread_show{preview, std::ref(img), finPix, sumPix, num_threads, 200};
-
-
     // main thread does the rest
-    colorize_image_tile(img, ctr, x_start, y_start, tileWidth, tileHeight);
-    render(img_ptr, x_start, y_start, tileHeight, tileWidth, camera, objects, lights, background, finPix[ctr], sumPix[ctr]);
+//    colorize_image_tile(img, ctr, x_start, y_start, tileWidth, tileHeight);
+//    render(img_ptr, x_start, y_start, tileHeight, tileWidth, camera, objects, lights, background, finPix[ctr], sumPix[ctr]);
 
     // wait for other threads to finish
-    for (unsigned int n=0; n<num_threads-1; ++n) {
-        cout << "... waiting for thread " << n << endl;
-        if (threads[n].joinable())
-            threads[n].join();
+    cout << "... waiting for threads to finish " << endl;
+    for (auto& t : threads) {
+        if (t.joinable())
+            t.join();
     }
     cout << "... finished rendering (" << timer.elapsed() << "s)" << endl;
     processing = false;
