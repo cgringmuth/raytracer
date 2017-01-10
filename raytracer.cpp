@@ -331,6 +331,11 @@ Vec3d operator*(Vec3d lhs, const double val) {
     return lhs *= val;
 }
 
+Vec3d operator*(const double val, Vec3d lhs) {
+    return lhs *= val;
+}
+
+
 
 double dotProduct(const Vec3d& v1, const Vec3d& v2) {
     return v1.dotProduct(v2);
@@ -603,15 +608,15 @@ struct Plane : public Primitive {
 };
 
 struct Triangle : public Primitive {
-    Vec3d v0, v1, v2, normal;
+    Vec3d v0, v1, v2, n0, n1, n2;
 
     Triangle(const Vec3d& v0, const Vec3d& v1, const Vec3d& v2, const Color& color)
-            : v0{v0}, v1{v1}, v2{v2}, Primitive{color}, normal{calcNormal()} { }
+            : v0{v0}, v1{v1}, v2{v2}, Primitive{color}, n0{calcNormal()}, n1{calcNormal()}, n2{calcNormal()} { }
     Triangle(const Vec3d& v0, const Vec3d& v1, const Vec3d& v2, const Material material=Material{})
-            : v0{v0}, v1{v1}, v2{v2}, Primitive{material}, normal{calcNormal()} {}
+            : v0{v0}, v1{v1}, v2{v2}, Primitive{material}, n0{calcNormal()}, n1{calcNormal()}, n2{calcNormal()} { }
 
     virtual bool intersect(const Ray& ray, double& dist, Vec3d& normal) const override {
-        normal = this->normal;
+        normal = this->n1;
 #if MT_TRIANGLE_INTERSECT==1
         // src: http://www.cs.virginia.edu/%7Egfx/Courses/2003/ImageSynthesis/papers/Acceleration/Fast%20MinimumStorage%20RayTriangle%20Intersection.pdf
         // Any point on the triangle can be described by (in the uv-space)
@@ -649,6 +654,9 @@ struct Triangle : public Primitive {
 
         // calc dist
         dist = invDet * qVec.dotProduct(v0v2);
+
+        normal = (1-u-v)*n0 + u*n1 + v*n2;
+//        normal.normalize();
 #else
 //        cout << normal << endl;
 //        cout << "v0: " << v0 << "v1: " << v1 << "v2: " << v2 << endl;
@@ -696,15 +704,16 @@ struct Triangle : public Primitive {
     }
 
     virtual Vec3d getNormal(const Vec3d& vec) const override {
-        return normal;
+        return n1;  // todo: does not make sense anymore
     }
 
     Vec3d calcNormal() {
+        // todo: with one normal for each vertex this is not correct anymore
         const Vec3d edge1{v2 - v0};
         const Vec3d edge0{v1 - v0};
-        normal = cross_product(edge0, edge1);
-        normal.normalize();
-        return normal;
+        n1 = cross_product(edge0, edge1);
+        n1.normalize();
+        return n1;
     }
 
     void scale(double s) {
@@ -731,6 +740,9 @@ struct Triangle : public Primitive {
         v0 *= mat;
         v1 *= mat;
         v2 *= mat;
+        n0 *= mat;
+        n1 *= mat;
+        n2 *= mat;
         return *this;
     }
 };
@@ -1115,8 +1127,6 @@ preview(cv::Mat& img, unsigned int& finPix, unsigned int sumPix, int delay = 100
     while(processing)
     {
         cv::Mat tmpimg{img.clone()};
-        progress = 0;
-        curFinPix = 0;
 //        for (int n=0; n<numProg; ++n) {
 //            curFinPix += finPixArr[n];
 //            progress += (double)(finPixArr[n])/sumPixArr[n];
@@ -1124,9 +1134,10 @@ preview(cv::Mat& img, unsigned int& finPix, unsigned int sumPix, int delay = 100
         progress = (float) finPix / sumPix * 100;
 
         curElapsed = timer.elapsed();
+        int curFinPix{finPix};
         const double pixPerSec{((double)(curFinPix - lastFinPix))/(curElapsed - lastElapsed)};
-        lastElapsed = curElapsed;
         lastFinPix = curFinPix;
+        lastElapsed = curElapsed;
         const string text{to_string((unsigned int)progress) + "%; t: " + to_string((unsigned int)curElapsed)
                           + " s; " + to_string((unsigned int) pixPerSec) + " pix/s"};
         const int fontFace{CV_FONT_HERSHEY_SIMPLEX};
@@ -1398,13 +1409,13 @@ create_scene(vector<shared_ptr<Primitive>>& objects, vector<Light>& lights) {
     string bunny_res2_path{mesh_root+"bunny/reconstruction/bun_zipper_res2.ply"};
     string bunny_path{mesh_root+"bunny/reconstruction/bun_zipper.ply"};
 //    shared_ptr<Model> bunny{Model::load_ply(bunny_path, Material(Color::white(), 0.2, 0.5, 0.8, 0.2))};
-    shared_ptr<Model> bunny{Model::load_ply(bunny_res4_path, glass)};     // glass bunny
+    shared_ptr<Model> bunny{Model::load_ply(bunny_path, glass)};     // glass bunny
     *bunny *= Mat3d::rotation(M_PI/8, M_PI/6, 0);
 //    *bunny *= Mat3d::rotationX(M_PI/6);
 //    *bunny *= Mat3d::rotationY(M_PI/4);
     bunny->scale(20);
     *bunny += Vec3d{-1.5, -2.75, -5.5};
-//    objects.push_back(bunny);
+    objects.push_back(bunny);
 
 
 //    string draon_res4_path{mesh_root+"dragon_recon/dragon_vrip_res4.ply"};
@@ -1511,7 +1522,6 @@ main(int argc, char** argv) {
     unsigned int ctr{0};
     unsigned int thread_count{0};
     while (true) {
-        cout << " ... starting thread: " << ctr << endl;
         {
             lock_guard<mutex> guard(RENDER_MUTEX);
             threads.push_back(thread{render, img_ptr, x_start, y_start, tileHeight, tileWidth, std::ref(camera),
@@ -1521,7 +1531,7 @@ main(int argc, char** argv) {
                                            std::ref(thread_count)});
             ++thread_count;
         }
-        colorize_image_tile(img, ctr++, x_start, y_start, tileWidth, tileHeight);
+//        colorize_image_tile(img, ctr++, x_start, y_start, tileWidth, tileHeight);
         x_start += tileWidth;
         if (x_start >= imWidth) {
             x_start = 0;
