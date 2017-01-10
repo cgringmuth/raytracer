@@ -134,17 +134,16 @@ struct Mat3d {
     size_t length() const { return width*height; }
 
     Mat3d& operator*=(const Mat3d& rhs) {
-        at(0,0) = at(0,0)*rhs.at(0,0) + at(1,0)*rhs.at(0,1) + at(2,0)*rhs.at(0,2);
-        at(1,0) = at(0,0)*rhs.at(1,0) + at(1,0)*rhs.at(1,1) + at(2,0)*rhs.at(1,2);
-        at(2,0) = at(0,0)*rhs.at(2,0) + at(1,0)*rhs.at(2,1) + at(2,0)*rhs.at(2,2);
-
-        at(0,1) = at(0,1)*rhs.at(0,0) + at(1,1)*rhs.at(0,1) + at(2,1)*rhs.at(0,2);
-        at(1,1) = at(0,1)*rhs.at(1,0) + at(1,1)*rhs.at(1,1) + at(2,1)*rhs.at(1,2);
-        at(2,1) = at(0,1)*rhs.at(2,0) + at(1,1)*rhs.at(2,1) + at(2,1)*rhs.at(2,2);
-
-        at(0,2) = at(0,2)*rhs.at(0,0) + at(1,2)*rhs.at(0,1) + at(2,2)*rhs.at(0,2);
-        at(1,2) = at(0,2)*rhs.at(1,0) + at(1,2)*rhs.at(1,1) + at(2,2)*rhs.at(1,2);
-        at(2,2) = at(0,2)*rhs.at(2,0) + at(1,2)*rhs.at(2,1) + at(2,2)*rhs.at(2,2);
+        const Mat3d tmp{v};
+        at(0,0) = tmp.at(0,0)*rhs.at(0,0) + tmp.at(1,0)*rhs.at(0,1) + tmp.at(2,0)*rhs.at(0,2);
+        at(1,0) = tmp.at(0,0)*rhs.at(1,0) + tmp.at(1,0)*rhs.at(1,1) + tmp.at(2,0)*rhs.at(1,2);
+        at(2,0) = tmp.at(0,0)*rhs.at(2,0) + tmp.at(1,0)*rhs.at(2,1) + tmp.at(2,0)*rhs.at(2,2);
+        at(0,1) = tmp.at(0,1)*rhs.at(0,0) + tmp.at(1,1)*rhs.at(0,1) + tmp.at(2,1)*rhs.at(0,2);
+        at(1,1) = tmp.at(0,1)*rhs.at(1,0) + tmp.at(1,1)*rhs.at(1,1) + tmp.at(2,1)*rhs.at(1,2);
+        at(2,1) = tmp.at(0,1)*rhs.at(2,0) + tmp.at(1,1)*rhs.at(2,1) + tmp.at(2,1)*rhs.at(2,2);
+        at(0,2) = tmp.at(0,2)*rhs.at(0,0) + tmp.at(1,2)*rhs.at(0,1) + tmp.at(2,2)*rhs.at(0,2);
+        at(1,2) = tmp.at(0,2)*rhs.at(1,0) + tmp.at(1,2)*rhs.at(1,1) + tmp.at(2,2)*rhs.at(1,2);
+        at(2,2) = tmp.at(0,2)*rhs.at(2,0) + tmp.at(1,2)*rhs.at(2,1) + tmp.at(2,2)*rhs.at(2,2);
         return *this;
     }
 
@@ -253,9 +252,12 @@ struct Vec3d {
     }
 
     Vec3d& operator*=(const Mat3d& mat) {
-        x = x*mat.at(0,0) + y*mat.at(1,0) + z*mat.at(2, 0);
-        y = x*mat.at(0,1) + y*mat.at(1,1) + z*mat.at(2, 1);
-        z = x*mat.at(0,2) + y*mat.at(1,2) + z*mat.at(2, 2);
+        double tx{x*mat.at(0,0) + y*mat.at(1,0) + z*mat.at(2, 0)};
+        double ty{x*mat.at(0,1) + y*mat.at(1,1) + z*mat.at(2, 1)};
+        double tz{x*mat.at(0,2) + y*mat.at(1,2) + z*mat.at(2, 2)};
+        x = tx;
+        y = ty;
+        z = tz;
         return *this;
     }
 
