@@ -34,11 +34,12 @@
  * - todo: depth of field
  * - todo: texture mapping
  * - todo: optimization: do calculation on GPU
- * - todo: optimization: early pruning of objects which cannot be hit (kd-tree, etc.)
+ * - todo: optimization: early pruning of objects which cannot be hit (kD-tree (spatial partitioning), BVH (object partitioning) etc.)
  * - todo: optimization: bounding box with fast intersection calculation around object (bounding box: sphere, box etc.)
  * - todo: create scene to hold primitives, lights etc.
  * - todo: restructure project
  * - todo: motion blur
+ * - todo: normal interpolation for triangle based models
  */
 
 
@@ -446,6 +447,10 @@ struct Color {
 
     static Color yellow() {
         return Color(1,1,0);
+    }
+
+    static Color glass() {
+        return Color(0.788, 0.858, 0.862);
     }
 
 };
@@ -969,6 +974,8 @@ struct Camera {
     }
 };
 
+class light_blue;
+
 ostream&
 operator<<(ostream& os, const Color& c) {
     os << c.r << " " << c.g << " " << c.b << " ";
@@ -1234,7 +1241,7 @@ Color
             const double cosAlpha{
                     max(reflectRay.dotProduct(lv), 0.0)};    // todo: check why we have to clip negative values
             color += l.color * curMaterial.ks * (pow(cosAlpha, curMaterial.specRefExp) / (ldist * ldist));     // todo: add reflective color here
-            color.clamp(0, 1);
+//            color.clamp(0, 1);
         }
 
         ++depth;
@@ -1246,8 +1253,8 @@ Color
         double n1, n2, n;  // refractive index we come from (n1) and go to (n2)
         double rCoef;    // reflective/refractive coefficient based on angle
 
-        // frensel equation
-        if ((curMaterial.reflective || curMaterial.refractive) && !depth<=MAX_DEPTH) {
+        // fresnel equation
+        if ((curMaterial.reflective || curMaterial.refractive) && depth<=MAX_DEPTH) {
             cosIncedent = ray.direction.dotProduct(hitNormal);     // is <0 if ray hits outside object hull (ray pointing towards object)
             if (cosIncedent < 0.0) {
                 // ray from air to object
@@ -1288,6 +1295,7 @@ Color
             colorRefract = curMaterial.kt * trace(objects, lights, background, Ray{hitPt - refractNormal * bias, refractDir}, depth);
         }
 
+
         color += curMaterial.color * curMaterial.ka;
         if (curMaterial.refractive)
             color += rCoef * colorReflect + (1-rCoef) * colorRefract;
@@ -1295,6 +1303,17 @@ Color
             color += colorReflect;
 
         color.clamp(0, 1);
+
+
+
+//        if (depth == MAX_DEPTH)
+//        {
+//            cout << "max depth reached: color: " << color << " factor r: " << rCoef << endl
+//                 << "\tcurMaterial.reflective: " << (curMaterial.reflective ? "true" : "false") << endl
+//                 << "\tcurMaterial.refractive: " << (curMaterial.refractive ? "true" : "false") << endl
+//                 << "\tcolorReflect: " << colorReflect << endl
+//                 << "\tcolorRefract: " << colorRefract << endl;
+//        }
     }
 
     return color;
@@ -1366,10 +1385,11 @@ create_scene(vector<shared_ptr<Primitive>>& objects, vector<Light>& lights) {
     lights.emplace_back(Light{Vec3d{0, 0, -1}, Color::white() * 10});
 //    lights.emplace_back(Light{Vec3d{5, -5, -2}, Color::white()*0.5});
 //    lights.emplace_back(Light{Vec{-30,-20,1}});
+    const Material glass(Color::glass(), 0.1, 0.1, 0.3, 1, 1, 8, 1.5, true, true);
 
     objects.push_back(make_shared<Sphere>(Vec3d{0, 0, -8}, 1, Material(Color::red(), 0, 0, 0, 1, 1, 8, 0, true)));
     objects.push_back(make_shared<Sphere>(Vec3d{2, 0.25, -8}, 0.75, Material{Color{1, 1, 0}, 0.2, 0.7, 0}));
-    objects.push_back(make_shared<Sphere>(Vec3d{0, 1, -3}, 0.5, Material(Color::blue(), 0, 0, 0, 0.99, 0.99, 8, 1.5, true, true)));
+    objects.push_back(make_shared<Sphere>(Vec3d{0, 1, -3}, 0.5, glass));
     objects.push_back(make_shared<Sphere>(Vec3d{-2.5, 2, -5}, 1, Material{Color{1, 0, 1}, 0.2, 0.5, 0.7}));
 
     create_box(objects);
@@ -1378,13 +1398,13 @@ create_scene(vector<shared_ptr<Primitive>>& objects, vector<Light>& lights) {
     string bunny_res2_path{mesh_root+"bunny/reconstruction/bun_zipper_res2.ply"};
     string bunny_path{mesh_root+"bunny/reconstruction/bun_zipper.ply"};
 //    shared_ptr<Model> bunny{Model::load_ply(bunny_path, Material(Color::white(), 0.2, 0.5, 0.8, 0.2))};
-    shared_ptr<Model> bunny{Model::load_ply(bunny_path, Material(Color::white(), 0, 0, 0, 0.9, 0.9, 8, 1.5, true, true))};     // glass bunny
+    shared_ptr<Model> bunny{Model::load_ply(bunny_res4_path, glass)};     // glass bunny
     *bunny *= Mat3d::rotation(M_PI/8, M_PI/6, 0);
 //    *bunny *= Mat3d::rotationX(M_PI/6);
 //    *bunny *= Mat3d::rotationY(M_PI/4);
     bunny->scale(20);
     *bunny += Vec3d{-1.5, -2.75, -5.5};
-    objects.push_back(bunny);
+//    objects.push_back(bunny);
 
 
 //    string draon_res4_path{mesh_root+"dragon_recon/dragon_vrip_res4.ply"};
