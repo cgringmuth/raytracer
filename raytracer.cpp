@@ -40,6 +40,7 @@
  * - todo: restructure project
  * - todo: motion blur
  * - todo: normal interpolation for triangle based models
+ * - todo: calc normals based on adjacent triangles in model class
  */
 
 
@@ -614,6 +615,10 @@ struct Triangle : public Primitive {
             : v0{v0}, v1{v1}, v2{v2}, Primitive{color}, n0{calcNormal()}, n1{calcNormal()}, n2{calcNormal()} { }
     Triangle(const Vec3d& v0, const Vec3d& v1, const Vec3d& v2, const Material material=Material{})
             : v0{v0}, v1{v1}, v2{v2}, Primitive{material}, n0{calcNormal()}, n1{calcNormal()}, n2{calcNormal()} { }
+    Triangle(const Vec3d& v0, const Vec3d& v1, const Vec3d& v2,
+             const Vec3d& n0, const Vec3d& n1, const Vec3d& n2,
+             const Material material=Material{})
+            : v0{v0}, v1{v1}, v2{v2}, Primitive{material}, n0{n0}, n1{n1}, n2{n2} { }
 
     virtual bool intersect(const Ray& ray, double& dist, Vec3d& normal) const override {
         normal = this->n1;
@@ -655,7 +660,7 @@ struct Triangle : public Primitive {
         // calc dist
         dist = invDet * qVec.dotProduct(v0v2);
 
-        normal = (1-u-v)*n0 + u*n1 + v*n2;
+        normal = (1-u-v)*n0 + u*n1 + v*n2;  // interpolate normal based on intersection point
 //        normal.normalize();
 #else
 //        cout << normal << endl;
@@ -704,16 +709,16 @@ struct Triangle : public Primitive {
     }
 
     virtual Vec3d getNormal(const Vec3d& vec) const override {
-        return n1;  // todo: does not make sense anymore
+        return n0;  // todo: does not make sense anymore
     }
 
     Vec3d calcNormal() {
         // todo: with one normal for each vertex this is not correct anymore
-        const Vec3d edge1{v2 - v0};
         const Vec3d edge0{v1 - v0};
-        n1 = cross_product(edge0, edge1);
-        n1.normalize();
-        return n1;
+        const Vec3d edge1{v2 - v0};
+        n0 = cross_product(edge0, edge1);
+        n0.normalize();
+        return n0;
     }
 
     void scale(double s) {
@@ -755,6 +760,15 @@ Triangle operator+(Triangle lhs, const Vec3d& v) {
     return lhs += v;
 }
 
+
+template <typename T>
+ostream& operator<<(ostream& os, vector<T> vec) {
+    for (int n=0; n<vec.size()-1; ++n)
+        os << vec[n] << " ";
+    os << vec[vec.size()-1];
+    return os;
+}
+
 struct Model : Primitive {
     vector<Triangle> faces;
 
@@ -765,7 +779,7 @@ struct Model : Primitive {
 
     Model() {}
 
-    static shared_ptr<Model> load_ply(const string& fname, const Material& material) {
+    static shared_ptr<Model> load_ply(const string& fname, const Material& material, bool calcNormal=false) {
         cout << "... loading model: " << fname << endl;
 
         ifstream ifs{fname};
@@ -783,7 +797,7 @@ struct Model : Primitive {
             stringstream ss{line};
             ss >> key;
             if (key == "ply") {
-                ply_type = false;
+                ply_type = true;
             } else if (key == "comment") {
                 // ignore for now
             } else if (key == "end_header") {
@@ -801,7 +815,8 @@ struct Model : Primitive {
         }
 
         // assume coordinates x, y, z come first and ignore all other following values
-        vector<Vec3d> vertices;
+        vector<Vec3d> vertices, normals;
+        vector<vector<unsigned int>> face_idx;
         vector<Triangle> faces;
 
         // read vertices
@@ -813,16 +828,47 @@ struct Model : Primitive {
             vertices.emplace_back(Vec3d{x, y, z});
         }
 
-        // read faces
+        // read faces indices
         for (int i = 0; i < nfaces; ++i) {
             getline(ifs, line);
             stringstream ss{line};
-            int num, iv0, iv1, iv2;
+            unsigned int num, iv0, iv1, iv2;
             ss >> num >> iv0 >> iv1 >> iv2;
             if (num != 3) {
-                throw runtime_error{"Only triangles supported"};
+                throw runtime_error{"Only triangles are supported"};
             }
-            faces.emplace_back(Triangle{vertices[iv0], vertices[iv1], vertices[iv2]});
+            face_idx.emplace_back(vector<unsigned int>{iv0, iv1, iv2});
+        }
+
+
+        if (calcNormal) {
+            // interpolate normals
+            normals.resize(vertices.size());
+            for (const auto& fidx : face_idx) {
+                const Vec3d v0{vertices[fidx[0]]};
+                const Vec3d v1{vertices[fidx[1]]};
+                const Vec3d v2{vertices[fidx[2]]};
+                normals[fidx[0]] += cross_product(v1-v0, v2-v0);
+                normals[fidx[1]] += cross_product(v2-v1, v0-v1);
+                normals[fidx[2]] += cross_product(v0-v2, v1-v2);
+            }
+            // normalize all normals
+            for (auto& normal : normals) {
+                normal.normalize();
+            }
+        }
+
+        // create faces
+        for (const auto& fixd : face_idx) {
+            const unsigned int iv0{fixd[0]};
+            const unsigned int iv1{fixd[1]};
+            const unsigned int iv2{fixd[2]};
+            if (calcNormal) {
+                faces.emplace_back(Triangle{vertices[iv0], vertices[iv1], vertices[iv2],
+                                 normals[iv0], normals[iv1], normals[iv2], material});
+            } else {
+                faces.emplace_back(Triangle{vertices[iv0], vertices[iv1], vertices[iv2], material});
+            }
         }
 
         return make_shared<Model>(material, faces);
@@ -1134,7 +1180,7 @@ preview(cv::Mat& img, unsigned int& finPix, unsigned int sumPix, int delay = 100
         progress = (float) finPix / sumPix * 100;
 
         curElapsed = timer.elapsed();
-        int curFinPix{finPix};
+        unsigned int curFinPix{finPix};
         const double pixPerSec{((double)(curFinPix - lastFinPix))/(curElapsed - lastElapsed)};
         lastFinPix = curFinPix;
         lastElapsed = curElapsed;
@@ -1142,7 +1188,7 @@ preview(cv::Mat& img, unsigned int& finPix, unsigned int sumPix, int delay = 100
                           + " s; " + to_string((unsigned int) pixPerSec) + " pix/s"};
         const int fontFace{CV_FONT_HERSHEY_SIMPLEX};
         const double fontScale{0.8};
-        const cv::Scalar color{cv::Scalar{0,255,0}};
+        const cv::Scalar color{0,255,0};
         const int thickness{1};
         int baseLine{0};
         const cv::Size textSize{cv::getTextSize(text, fontFace, fontScale, thickness+2, &baseLine)};
@@ -1265,7 +1311,7 @@ Color
         double rCoef;    // reflective/refractive coefficient based on angle
 
         // fresnel equation
-        if ((curMaterial.reflective || curMaterial.refractive) && depth<=MAX_DEPTH) {
+        if (curMaterial.refractive && depth<=MAX_DEPTH) {
             cosIncedent = ray.direction.dotProduct(hitNormal);     // is <0 if ray hits outside object hull (ray pointing towards object)
             if (cosIncedent < 0.0) {
                 // ray from air to object
@@ -1295,7 +1341,7 @@ Color
         Color colorReflect{0};
         if (curMaterial.reflective && depth <= MAX_DEPTH) {
             const Vec3d reflectDir{-hitNormal * 2 * dotProduct(hitNormal,ray.direction) + ray.direction};
-            colorReflect = curMaterial.kr * trace(objects, lights, background, Ray{hitPt + hitNormal * bias, reflectDir}, depth) / (double)(depth);
+            colorReflect = curMaterial.kr * trace(objects, lights, background, Ray{hitPt + hitNormal * bias, reflectDir}, depth);
         }
         // refractive shading recursive tracing
         Color colorRefract{0};
@@ -1308,10 +1354,11 @@ Color
 
 
         color += curMaterial.color * curMaterial.ka;
-        if (curMaterial.refractive)
-            color += rCoef * colorReflect + (1-rCoef) * colorRefract;
-        else
+        if (curMaterial.refractive) {
+            color += rCoef * colorReflect + (1 - rCoef) * colorRefract;
+        } else {
             color += colorReflect;
+        }
 
         color.clamp(0, 1);
 
@@ -1396,11 +1443,13 @@ create_scene(vector<shared_ptr<Primitive>>& objects, vector<Light>& lights) {
     lights.emplace_back(Light{Vec3d{0, 0, -1}, Color::white() * 10});
 //    lights.emplace_back(Light{Vec3d{5, -5, -2}, Color::white()*0.5});
 //    lights.emplace_back(Light{Vec{-30,-20,1}});
-    const Material glass(Color::glass(), 0.1, 0.1, 0.3, 1, 1, 8, 1.5, true, true);
+    const Material glass(Color::glass(), 0.1, 0.1, 0.2, 0.8, 0.8, 8, 1.5, true, true);
+    const Material porcelain(Color::white(), 0.2, 0.5, 0.7, 0.3, 0, 8, 0, true);
+    const Material mirror(Color::white(), 0, 0, 0, 1, 1, 8, 0, true);
 
     objects.push_back(make_shared<Sphere>(Vec3d{0, 0, -8}, 1, Material(Color::red(), 0, 0, 0, 1, 1, 8, 0, true)));
     objects.push_back(make_shared<Sphere>(Vec3d{2, 0.25, -8}, 0.75, Material{Color{1, 1, 0}, 0.2, 0.7, 0}));
-    objects.push_back(make_shared<Sphere>(Vec3d{0, 1, -3}, 0.5, glass));
+//    objects.push_back(make_shared<Sphere>(Vec3d{0, 1, -3}, 0.5, glass));
     objects.push_back(make_shared<Sphere>(Vec3d{-2.5, 2, -5}, 1, Material{Color{1, 0, 1}, 0.2, 0.5, 0.7}));
 
     create_box(objects);
@@ -1409,12 +1458,13 @@ create_scene(vector<shared_ptr<Primitive>>& objects, vector<Light>& lights) {
     string bunny_res2_path{mesh_root+"bunny/reconstruction/bun_zipper_res2.ply"};
     string bunny_path{mesh_root+"bunny/reconstruction/bun_zipper.ply"};
 //    shared_ptr<Model> bunny{Model::load_ply(bunny_path, Material(Color::white(), 0.2, 0.5, 0.8, 0.2))};
-    shared_ptr<Model> bunny{Model::load_ply(bunny_path, glass)};     // glass bunny
+    shared_ptr<Model> bunny{Model::load_ply(bunny_path, glass, true)};     // glass bunny
     *bunny *= Mat3d::rotation(M_PI/8, M_PI/6, 0);
 //    *bunny *= Mat3d::rotationX(M_PI/6);
+//    *bunny *= Mat3d::rotationZ(M_PI/2);
 //    *bunny *= Mat3d::rotationY(M_PI/4);
     bunny->scale(20);
-    *bunny += Vec3d{-1.5, -2.75, -5.5};
+    *bunny += Vec3d{-1.5, -3, -6};
     objects.push_back(bunny);
 
 
@@ -1492,15 +1542,11 @@ main(int argc, char** argv) {
     Camera camera{Vec3d{0,0,0}, Vec3d{0,1,0}, Vec3d{0,0,-1}, ASPECT_RATIO, FOV, imWidth, imHeight};
     camera.rotate(0,0,M_PI/16);
 //    camera.rotate(0,0,0);
-    camera.move(Vec3d{-1,0,-0.5});
+//    camera.move(Vec3d{-0.5,0,-0.25});
 
     vector<shared_ptr<Primitive>> objects;
     vector<Light> lights;
     create_scene(objects, lights);
-
-    const Vec3d origin{0, 0, 0};  // center of projection
-
-    // 8 threads (7 child threads + 1 main thread)
     const int max_threads{8};   // max: num available threads
     unsigned int finPix{0};
 
