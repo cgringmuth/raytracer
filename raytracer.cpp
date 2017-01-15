@@ -1576,10 +1576,7 @@ main(int argc, char** argv) {
     vector<shared_ptr<Primitive>> objects;
     vector<Light> lights;
     create_scene(objects, lights);
-
     unsigned int finPix{0};
-
-
 
     // split image into tiles (2x4)
     const unsigned int nXTiles{20};
@@ -1593,7 +1590,8 @@ main(int argc, char** argv) {
 
 #if USE_OPENMP == 0
     // start threads
-    const int max_threads{8};   // max: num available threads
+    const unsigned int max_threads{thread::hardware_concurrency()};   // max: num available threads
+    cout << "... starting " << max_threads << " threads" << endl;
     vector<thread> threads;
     unsigned int x_start{0};
     unsigned int y_start{0};
