@@ -1389,10 +1389,8 @@ Color
 void
 render(ImageType* img, const unsigned int x_start, const unsigned int y_start, const unsigned int cH,
        const unsigned int cW, const Camera& camera, const vector<shared_ptr<Primitive>>& objects,
-       const vector<Light>& lights, const Color& background, unsigned int& finPix
-#if USE_OPENMP == 0
-       ,unsigned int& thread_count
-#endif
+       const vector<Light>& lights, const Color& background, unsigned int& finPix,
+       unsigned int& thread_count // only required when used in threads
 ) {
     const unsigned int W{camera.imWidth};
     const unsigned int H{camera.imHeight};
@@ -1419,7 +1417,9 @@ render(ImageType* img, const unsigned int x_start, const unsigned int y_start, c
     }
 
 
-#if USE_OPENMP == 0
+#if USE_OPENMP == 1
+    processing = false;
+#else
     {
         lock_guard<mutex> guard(RENDER_MUTEX);
         --thread_count;
@@ -1477,12 +1477,12 @@ create_scene(vector<shared_ptr<Primitive>>& objects, vector<Light>& lights) {
 
     create_box(objects);
     const string mesh_root{"/home/chris/shared/github/chris/raytracer/data/3d_meshes/"};
-    string bunny_res4_path{mesh_root+"bunny/reconstruction/bun_zipper_res4.ply"};
-    string bunny_res2_path{mesh_root+"bunny/reconstruction/bun_zipper_res2.ply"};
-    string bunny_path{mesh_root+"bunny/reconstruction/bun_zipper.ply"};
+    string bunny_res4_path{mesh_root + "bunny/reconstruction/bun_zipper_res4.ply"};
+    string bunny_res2_path{mesh_root + "bunny/reconstruction/bun_zipper_res2.ply"};
+    string bunny_path{mesh_root + "bunny/reconstruction/bun_zipper.ply"};
     shared_ptr<Model> bunny{Model::load_ply(bunny_path, porcelain, true)};     // glass bunny
 //    shared_ptr<Model> bunny{Model::load_ply(bunny_path, Material(Color::white(), 0.2, 0.5, 0.8, 0.2))};
-    *bunny *= Mat3d::rotation(M_PI/8, M_PI/6, 0);
+    *bunny *= Mat3d::rotation(M_PI / 8, M_PI / 6, 0);
 //    *bunny *= Mat3d::rotationX(M_PI/6);
 //    *bunny *= Mat3d::rotationZ(M_PI/2);
 //    *bunny *= Mat3d::rotationY(M_PI/4);
@@ -1523,10 +1523,62 @@ create_scene(vector<shared_ptr<Primitive>>& objects, vector<Light>& lights) {
     // top
     objects.push_back(make_shared<Plane>(0, -1, 0, box_len, wall_color));
     // behind camera
-    objects.push_back(make_shared<Plane>(0, 0, -1, box_len, Color(1,1,0)));
+    objects.push_back(make_shared<Plane>(0, 0, -1, box_len, Color(1, 1, 0)));
 
 //    s.radius = 10;
+}
 
+
+void thread_render(ImageType* img_ptr, const unsigned int imWidth, const unsigned int imHeight,
+                   const vector<shared_ptr<Primitive>>& objects, const vector<Light>& lights,
+                   const Camera& camera, const Color& background, unsigned int& finPix)
+{
+
+    // split image into tiles (2x4)
+    const unsigned int nXTiles{20};
+    const unsigned int nYTiles{20};
+    const unsigned int tileWidth{imWidth/nXTiles};
+    const unsigned int tileHeight{imHeight/nYTiles};
+
+    const unsigned int max_threads{thread::hardware_concurrency()};   // max: num available threads
+    cout << "... starting " << max_threads << " threads" << endl;
+    vector<thread> threads;
+    unsigned int x_start{0};
+    unsigned int y_start{0};
+    unsigned int ctr{0};
+    unsigned int thread_count{0};
+    while (true) {
+        {
+            lock_guard<mutex> guard(RENDER_MUTEX);
+            threads.push_back(thread{render, img_ptr, x_start, y_start, tileHeight, tileWidth, std::ref(camera),
+                                     std::ref(objects),
+                                     lights, background,
+                                     std::ref(finPix),
+                                     std::ref(thread_count)});
+            ++thread_count;
+        }
+//        colorize_image_tile(img, ctr++, x_start, y_start, tileWidth, tileHeight);
+        x_start += tileWidth;
+        if (x_start >= imWidth) {
+            x_start = 0;
+            y_start += tileHeight;
+            if (y_start >= imHeight)
+                break;
+        }
+        // wait until new threads can be started
+        while (thread_count >= max_threads) {
+            this_thread::sleep_for(chrono::milliseconds(100));
+        }
+    }
+
+    // wait for other threads to finish
+    cout << "... waiting for threads to finish " << endl;
+    for (auto& t : threads) {
+        if (t.joinable())
+            t.join();
+    }
+
+    processing = false;
 }
 
 int
@@ -1586,58 +1638,29 @@ main(int argc, char** argv) {
 
     timer.reset();
     // starting thread to show progress
-    thread thread_show{preview, std::ref(img), std::ref(finPix), imWidth*imHeight, 200};
+//    thread thread_show{preview, std::ref(img), std::ref(finPix), imWidth*imHeight, 200};
 
 #if USE_OPENMP == 0
     // start threads
-    const unsigned int max_threads{thread::hardware_concurrency()};   // max: num available threads
-    cout << "... starting " << max_threads << " threads" << endl;
-    vector<thread> threads;
-    unsigned int x_start{0};
-    unsigned int y_start{0};
-    unsigned int ctr{0};
-    unsigned int thread_count{0};
-    while (true) {
-        {
-            lock_guard<mutex> guard(RENDER_MUTEX);
-            threads.push_back(thread{render, img_ptr, x_start, y_start, tileHeight, tileWidth, std::ref(camera),
-                                           std::ref(objects),
-                                           lights, background,
-                                           std::ref(finPix),
-                                           std::ref(thread_count)});
-            ++thread_count;
-        }
-//        colorize_image_tile(img, ctr++, x_start, y_start, tileWidth, tileHeight);
-        x_start += tileWidth;
-        if (x_start >= imWidth) {
-            x_start = 0;
-            y_start += tileHeight;
-            if (y_start >= imHeight)
-                break;
-        }
-        // wait until new threads can be started
-        while (thread_count >= max_threads) {
-            this_thread::sleep_for(chrono::milliseconds(100));
-        }
-    }
-
-        // wait for other threads to finish
-    cout << "... waiting for threads to finish " << endl;
-    for (auto& t : threads) {
-        if (t.joinable())
-            t.join();
-    }
+    thread renderThread{thread_render, img_ptr, imWidth, imHeight, std::ref(objects), std::ref(lights), std::ref(camera),
+                        std::ref(background), std::ref(finPix)};
 #else
-    render(img_ptr, 0, 0, imHeight, imWidth, camera, objects, lights, background, finPix);
+    unsigned int thread_count = 0;
+    thread renderThread{render, img_ptr, 0, 0, imHeight, imWidth, std::ref(camera), std::ref(objects), std::ref(lights),
+                        std::ref(background), std::ref(finPix), std::ref(thread_count)};
 #endif
-    cout << "... finished rendering (" << timer.elapsed() << "s)" << endl;
-    processing = false;
-    if (thread_show.joinable())
-        thread_show.join();
 
-    cv::imshow(winName, img);
+    preview(img, finPix, imWidth*imHeight, 200);
+
+    cout << "... finished rendering (" << timer.elapsed() << "s)" << endl;
     cout << "... write image " << outFilename << endl;
     cv::imwrite(outFilename, img);
+
+
+//    if (thread_show.joinable())
+//        thread_show.join();
+
+    cv::imshow(winName, img);
     cv::waitKey();
     delete[] img_ptr;
 }
