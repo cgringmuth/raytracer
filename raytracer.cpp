@@ -1016,15 +1016,36 @@ struct Camera {
             eye(Vec3d{0,0,0}), up(Vec3d{0,1,0}), at(Vec3d{0,0,-1}), right(cross_product(at, up)), aspectRatio(aspectRatio), fov(fov), imWidth(imWidth),
                                   imHeight(imHeight) {}
 
-    Ray castRay(unsigned int x, unsigned int y) const {
-        const double px_ndc{(x + 0.5) / imWidth};
-        const double py_ndc{(y + 0.5) / imHeight};
+    Ray getCamRay(const double x, const double y) const {
+        const double px_ndc{x / imWidth};
+        const double py_ndc{y / imHeight};
         const double cam_x{(2 * px_ndc - 1) * aspectRatio * tan(deg2rad(fov) / 2)};
         const double cam_y{(1 - 2 * py_ndc) * tan(deg2rad(fov) / 2)};
         Vec3d camDir{right * cam_x + up * cam_y + at};
         camDir.normalize();
 
         return Ray{eye, camDir};
+    }
+
+    Ray castRay(unsigned int x, unsigned int y) const {
+        return getCamRay(x+0.5, y+0.5);
+    }
+
+    vector<Ray> castRays(unsigned int x, unsigned int y) const {
+        vector<Ray> rays;
+        const double cx{0.5};
+        const double cy{0.5};
+
+        return {getCamRay(x+0.5, y+0.5),
+                getCamRay(x+0.75, y+0.75),
+                getCamRay(x+0.25, y+0.25),
+                getCamRay(x+0.75, y+0.25),
+                getCamRay(x+0.25, y+0.75),
+                getCamRay(x, y),
+                getCamRay(x+1.0, y+1.0),
+                getCamRay(x+1.0, y),
+                getCamRay(x+1.0, y+1.0)
+        };
     }
 
     Camera& rotate(double alpha, double beta, double gamma) {
@@ -1401,10 +1422,14 @@ render(ImageType* img, const unsigned int x_start, const unsigned int y_start, c
     for (unsigned int y = y_start; y < cH+y_start; ++y) {
         ImageType* img_ptr{img + 3 * (y*W + x_start)};
         for (unsigned int x = x_start; x < cW+x_start; ++x) {
-            const Ray ray = camera.castRay(x, y);
+//            const Ray ray{camera.castRay(x, y)};
+            const vector<Ray> rays{camera.castRays(x,y)};
+            const unsigned int numRays{rays.size()};
+            Color px_color{0};
 
             // trace primary/camera ray
-            Color px_color{trace(objects, lights, background, ray, 0)};
+            for (const auto& ray : rays)
+                px_color += trace(objects, lights, background, ray, 0) / numRays;
 //            Color px_color{calcDist(objects, ray)};
 
             // Using Opencv bgr
