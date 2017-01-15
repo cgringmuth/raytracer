@@ -1418,7 +1418,7 @@ render(ImageType* img, const unsigned int x_start, const unsigned int y_start, c
 
 
 #if USE_OPENMP == 1
-    processing = false;
+    processing = false;     // notify main thread that processing is finished
 #else
     {
         lock_guard<mutex> guard(RENDER_MUTEX);
@@ -1488,7 +1488,7 @@ create_scene(vector<shared_ptr<Primitive>>& objects, vector<Light>& lights) {
 //    *bunny *= Mat3d::rotationY(M_PI/4);
     bunny->scale(20);
     *bunny += Vec3d{-1.5, -3, -6};
-    objects.push_back(bunny);
+//    objects.push_back(bunny);
 
 
 //    string draon_res4_path{mesh_root+"dragon_recon/dragon_vrip_res4.ply"};
@@ -1578,7 +1578,7 @@ void thread_render(ImageType* img_ptr, const unsigned int imWidth, const unsigne
             t.join();
     }
 
-    processing = false;
+    processing = false;     // notify main thread that processing is finished
 }
 
 int
@@ -1656,11 +1656,9 @@ main(int argc, char** argv) {
     cout << "... write image " << outFilename << endl;
     cv::imwrite(outFilename, img);
 
-
-//    if (thread_show.joinable())
-//        thread_show.join();
-
     cv::imshow(winName, img);
     cv::waitKey();
+    if (renderThread.joinable())
+        renderThread.join();
     delete[] img_ptr;
 }
