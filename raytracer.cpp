@@ -36,7 +36,6 @@
  * - todo: optimization: early pruning of objects which cannot be hit (kD-tree (spatial partitioning), BVH (object partitioning) etc.)
  * - todo: optimization: bounding box with fast intersection calculation around object (bounding box: sphere, box etc.)
  * - todo: optimization: do calculation on GPU
- * - todo: consider using openmp for rendering
  * - todo: create scene to hold primitives, lights etc.
  * - todo: restructure project
  * - todo: motion blur
@@ -1577,10 +1576,10 @@ main(int argc, char** argv) {
     vector<shared_ptr<Primitive>> objects;
     vector<Light> lights;
     create_scene(objects, lights);
-    const int max_threads{8};   // max: num available threads
+
     unsigned int finPix{0};
 
-    vector<thread> threads;
+
 
     // split image into tiles (2x4)
     const unsigned int nXTiles{20};
@@ -1594,6 +1593,8 @@ main(int argc, char** argv) {
 
 #if USE_OPENMP == 0
     // start threads
+    const int max_threads{8};   // max: num available threads
+    vector<thread> threads;
     unsigned int x_start{0};
     unsigned int y_start{0};
     unsigned int ctr{0};
@@ -1621,16 +1622,16 @@ main(int argc, char** argv) {
             this_thread::sleep_for(chrono::milliseconds(100));
         }
     }
-#else
-    render(img_ptr, 0, 0, imHeight, imWidth, camera, objects, lights, background, finPix);
-#endif
 
-    // wait for other threads to finish
+        // wait for other threads to finish
     cout << "... waiting for threads to finish " << endl;
     for (auto& t : threads) {
         if (t.joinable())
             t.join();
     }
+#else
+    render(img_ptr, 0, 0, imHeight, imWidth, camera, objects, lights, background, finPix);
+#endif
     cout << "... finished rendering (" << timer.elapsed() << "s)" << endl;
     processing = false;
     if (thread_show.joinable())
