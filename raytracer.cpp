@@ -60,7 +60,11 @@
  * to reader more.
  */
 #ifndef CULLING
-#define CULLING     0
+#define CULLING                 0
+#endif
+
+#ifndef USE_OPENMP
+#define USE_OPENMP              0
 #endif
 
 using namespace std;
@@ -1384,11 +1388,19 @@ Color
 }
 
 void
-render(ImageType* img, unsigned int x_start, unsigned int y_start, unsigned int cH, unsigned int cW, const Camera& camera, const vector<shared_ptr<Primitive>>& objects,
-       const vector<Light>& lights, const Color& background, unsigned int& finPix, unsigned int& thread_count) {
+render(ImageType* img, const unsigned int x_start, const unsigned int y_start, const unsigned int cH,
+       const unsigned int cW, const Camera& camera, const vector<shared_ptr<Primitive>>& objects,
+       const vector<Light>& lights, const Color& background, unsigned int& finPix
+#if USE_OPENMP == 0
+       ,unsigned int& thread_count
+#endif
+) {
     const unsigned int W{camera.imWidth};
     const unsigned int H{camera.imHeight};
 
+#if USE_OPENMP == 1
+    #pragma omp parallel for schedule(dynamic,10)       // OpenMP
+#endif
     for (unsigned int y = y_start; y < cH+y_start; ++y) {
         ImageType* img_ptr{img + 3 * (y*W + x_start)};
         for (unsigned int x = x_start; x < cW+x_start; ++x) {
@@ -1407,10 +1419,13 @@ render(ImageType* img, unsigned int x_start, unsigned int y_start, unsigned int 
         }
     }
 
+
+#if USE_OPENMP == 0
     {
         lock_guard<mutex> guard(RENDER_MUTEX);
         --thread_count;
     }
+#endif
 }
 
 void
@@ -1530,6 +1545,12 @@ main(int argc, char** argv) {
     cout << "... using Moeller-Trumbore algorithm for triangle intersection calculation" << endl;
 #endif
     cout << "... write to file: " << outFilename << endl;
+
+#if USE_OPENMP == 1
+    cout << "... using OpenMP for parallelization" << endl;
+#else
+    cout << "... using c++ 11 threads for parallelization" << endl;
+#endif
 //    check_op_overloading();
 
     // resolution has to be even
@@ -1571,6 +1592,7 @@ main(int argc, char** argv) {
     // starting thread to show progress
     thread thread_show{preview, std::ref(img), std::ref(finPix), imWidth*imHeight, 200};
 
+#if USE_OPENMP == 0
     // start threads
     unsigned int x_start{0};
     unsigned int y_start{0};
@@ -1599,10 +1621,9 @@ main(int argc, char** argv) {
             this_thread::sleep_for(chrono::milliseconds(100));
         }
     }
-
-    // main thread does the rest
-//    colorize_image_tile(img, ctr, x_start, y_start, tileWidth, tileHeight);
-//    render(img_ptr, x_start, y_start, tileHeight, tileWidth, camera, objects, lights, background, finPix[ctr], sumPix[ctr]);
+#else
+    render(img_ptr, 0, 0, imHeight, imWidth, camera, objects, lights, background, finPix);
+#endif
 
     // wait for other threads to finish
     cout << "... waiting for threads to finish " << endl;
