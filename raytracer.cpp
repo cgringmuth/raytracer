@@ -28,7 +28,6 @@
 /** TODOs
  * - todo: Add material with different reflection models (refraction etc.)
  * - todo: Loading scene from file (xml, YAML etc.) -> I would prefer yaml
- * - todo: Implement anti-aliasing
  * - todo: Soft-shadows
  * - todo: Area lights
  * - todo: depth of field
@@ -1008,13 +1007,34 @@ struct Camera {
     unsigned int imWidth;
     unsigned int imHeight;
 
+    struct Point2D { double x, y;
+        Point2D() : x{0}, y{0} {}
+        Point2D(double x, double y) : x{x}, y{y} {}
+    };
+    vector<Point2D> antiAliasingPattern;
+
+
     Camera(const Vec3d& eye, const Vec3d& up, const Vec3d& at, double aspectRatio, double fov, unsigned int imWidth,
            unsigned int imHeight) : eye(eye), up(up), at(at), right(cross_product(at, up)), aspectRatio(aspectRatio), fov(fov), imWidth(imWidth),
-                                imHeight(imHeight) {}
+                                imHeight(imHeight) { antiAliasingPattern = defaultAntiAliasingPattern(); }
 
     Camera(double aspectRatio, double fov, unsigned int imWidth, unsigned int imHeight) :
             eye(Vec3d{0,0,0}), up(Vec3d{0,1,0}), at(Vec3d{0,0,-1}), right(cross_product(at, up)), aspectRatio(aspectRatio), fov(fov), imWidth(imWidth),
-                                  imHeight(imHeight) {}
+                                  imHeight(imHeight) { antiAliasingPattern = defaultAntiAliasingPattern(); }
+
+    static
+    vector<Point2D> defaultAntiAliasingPattern() {
+        return {Point2D(0.5, 0.5),
+                Point2D(0.25, 0.25),
+                Point2D(0.75, 0.25),
+                Point2D(0.75, 0.75),
+                Point2D(0.25, 0.75),
+                Point2D(0, 0),
+                Point2D(1.0, 0),
+                Point2D(1.0, 1.0),
+                Point2D(0, 1.0),
+        };
+    }
 
     Ray getCamRay(const double x, const double y) const {
         const double px_ndc{x / imWidth};
@@ -1033,19 +1053,11 @@ struct Camera {
 
     vector<Ray> castRays(unsigned int x, unsigned int y) const {
         vector<Ray> rays;
-        const double cx{0.5};
-        const double cy{0.5};
+        for (const auto& aap : antiAliasingPattern) {
+            rays.push_back(getCamRay(x+aap.x, y+aap.y));
+        }
 
-        return {getCamRay(x+0.5, y+0.5),
-                getCamRay(x+0.75, y+0.75),
-                getCamRay(x+0.25, y+0.25),
-                getCamRay(x+0.75, y+0.25),
-                getCamRay(x+0.25, y+0.75),
-                getCamRay(x, y),
-                getCamRay(x+1.0, y+1.0),
-                getCamRay(x+1.0, y),
-                getCamRay(x+1.0, y+1.0)
-        };
+        return rays;
     }
 
     Camera& rotate(double alpha, double beta, double gamma) {
@@ -1424,7 +1436,7 @@ render(ImageType* img, const unsigned int x_start, const unsigned int y_start, c
         for (unsigned int x = x_start; x < cW+x_start; ++x) {
 //            const Ray ray{camera.castRay(x, y)};
             const vector<Ray> rays{camera.castRays(x,y)};
-            const unsigned int numRays{rays.size()};
+            const size_t numRays{rays.size()};
             Color px_color{0};
 
             // trace primary/camera ray
@@ -1513,7 +1525,7 @@ create_scene(vector<shared_ptr<Primitive>>& objects, vector<Light>& lights) {
 //    *bunny *= Mat3d::rotationY(M_PI/4);
     bunny->scale(20);
     *bunny += Vec3d{-1.5, -3, -6};
-//    objects.push_back(bunny);
+    objects.push_back(bunny);
 
 
 //    string draon_res4_path{mesh_root+"dragon_recon/dragon_vrip_res4.ply"};
