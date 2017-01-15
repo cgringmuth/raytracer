@@ -33,14 +33,14 @@
  * - todo: Area lights
  * - todo: depth of field
  * - todo: texture mapping
- * - todo: optimization: do calculation on GPU
  * - todo: optimization: early pruning of objects which cannot be hit (kD-tree (spatial partitioning), BVH (object partitioning) etc.)
  * - todo: optimization: bounding box with fast intersection calculation around object (bounding box: sphere, box etc.)
+ * - todo: optimization: do calculation on GPU
+ * - todo: consider using openmp for rendering
  * - todo: create scene to hold primitives, lights etc.
  * - todo: restructure project
  * - todo: motion blur
- * - todo: normal interpolation for triangle based models
- * - todo: calc normals based on adjacent triangles in model class
+ * - todo: global illumination: https://en.wikipedia.org/wiki/Global_illumination
  */
 
 
@@ -120,6 +120,10 @@ struct Mat3d {
         memcpy(this->v, v, sizeof(double)*length());
     }
 
+    Mat3d(const Mat3d& mat) {
+        memcpy(this->v, mat.v, sizeof(double)*length());
+    }
+
     double& at(unsigned int x, unsigned int y) { return v[y*width + x]; }
     double at(unsigned int x, unsigned int y) const { return v[y*width + x]; }
 
@@ -134,7 +138,7 @@ struct Mat3d {
     size_t length() const { return width*height; }
 
     Mat3d& operator*=(const Mat3d& rhs) {
-        const Mat3d tmp{v};
+        const Mat3d tmp{*this};
         at(0,0) = tmp.at(0,0)*rhs.at(0,0) + tmp.at(1,0)*rhs.at(0,1) + tmp.at(2,0)*rhs.at(0,2);
         at(1,0) = tmp.at(0,0)*rhs.at(1,0) + tmp.at(1,0)*rhs.at(1,1) + tmp.at(2,0)*rhs.at(1,2);
         at(2,0) = tmp.at(0,0)*rhs.at(2,0) + tmp.at(1,0)*rhs.at(2,1) + tmp.at(2,0)*rhs.at(2,2);
@@ -1446,8 +1450,11 @@ create_scene(vector<shared_ptr<Primitive>>& objects, vector<Light>& lights) {
 //    lights.emplace_back(Light{Vec3d{5, -5, -2}, Color::white()*0.5});
 //    lights.emplace_back(Light{Vec{-30,-20,1}});
     const Material glass(Color::glass(), 0.1, 0.1, 0.2, 0.8, 0.8, 8, 1.5, true, true);
+    const Material glass2(Color::glass(), 0, 0, 0.2, 0.8, 0.2, 8, 1.5, true, true);
     const Material porcelain(Color::white(), 0.2, 0.5, 0.7, 0.3, 0, 8, 0, true);
     const Material mirror(Color::white(), 0, 0, 0, 1, 1, 8, 0, true);
+    const Material m1(Color::light_gray(), 0.1, 0.7, 0.4, 0.3, 0, 8, 0, true);
+    const Material m2(Color::white(), 0.1, 0.7, 0.4);
 
     objects.push_back(make_shared<Sphere>(Vec3d{0, 0, -8}, 1, Material(Color::red(), 0, 0, 0, 1, 1, 8, 0, true)));
     objects.push_back(make_shared<Sphere>(Vec3d{2, 0.25, -8}, 0.75, Material{Color{1, 1, 0}, 0.2, 0.7, 0}));
@@ -1459,8 +1466,8 @@ create_scene(vector<shared_ptr<Primitive>>& objects, vector<Light>& lights) {
     string bunny_res4_path{mesh_root+"bunny/reconstruction/bun_zipper_res4.ply"};
     string bunny_res2_path{mesh_root+"bunny/reconstruction/bun_zipper_res2.ply"};
     string bunny_path{mesh_root+"bunny/reconstruction/bun_zipper.ply"};
+    shared_ptr<Model> bunny{Model::load_ply(bunny_path, porcelain, true)};     // glass bunny
 //    shared_ptr<Model> bunny{Model::load_ply(bunny_path, Material(Color::white(), 0.2, 0.5, 0.8, 0.2))};
-    shared_ptr<Model> bunny{Model::load_ply(bunny_path, glass, true)};     // glass bunny
     *bunny *= Mat3d::rotation(M_PI/8, M_PI/6, 0);
 //    *bunny *= Mat3d::rotationX(M_PI/6);
 //    *bunny *= Mat3d::rotationZ(M_PI/2);
