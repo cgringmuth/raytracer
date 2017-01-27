@@ -118,12 +118,9 @@ struct Mat3d {
         v[6] = v6; v[7] = v7; v[8] = v8;
     }
 
-    Mat3d(double* v) {
+    Mat3d(const Mat3d& mat) : Mat3d{mat.v} { }
+    Mat3d(const double* v) {
         memcpy(this->v, v, sizeof(double)*length());
-    }
-
-    Mat3d(const Mat3d& mat) {
-        memcpy(this->v, mat.v, sizeof(double)*length());
     }
 
     double& at(unsigned int x, unsigned int y) { return v[y*width + x]; }
@@ -208,11 +205,9 @@ ostream& operator<<(ostream& os, const Mat3d& mat) {
 struct Vec3d {
     double x, y, z;
 
-    Vec3d() : x{0}, y{0}, z{0} {}
-
+    Vec3d() : Vec3d{0,0,0} {}
+    Vec3d(const Vec3d& v) : Vec3d{v.x, v.y, v.z} {}
     Vec3d(double x, double y, double z) : x{x}, y{y}, z{z} {}
-
-    Vec3d(const Vec3d& v) : x{v.x}, y{v.y}, z{v.z} {}
 
     Vec3d operator-() const {
         Vec3d v;
@@ -777,15 +772,98 @@ ostream& operator<<(ostream& os, vector<T> vec) {
     return os;
 }
 
+/** The most common object to be rendered in a raytracer
+ *
+ */
+struct Sphere : public Primitive {
+    // define location + radius
+    Vec3d center;
+    double radius;
+
+    Sphere(const Vec3d& c, double r, const Color& color) : center{c}, radius{r}, Primitive{color} {}
+    Sphere(const Vec3d& c, double r, const Material& material) : center{c}, radius{r}, Primitive{material} {}
+    Sphere() {}
+
+    // get intersection with ray: refer: https://en.wikipedia.org/wiki/Line%E2%80%93sphere_intersection
+    // more details: https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rendering-simple-shapes/ray-sphere-intersection
+    virtual bool
+    intersect(const Ray& ray, double& dist, Vec3d& normal) const override {
+        // (l * (o - c))^2 - || o - c ||^2 + r^2
+        const Vec3d temp{ray.origin - center};
+        const double val1 = temp.dotProduct(ray.direction);
+        const double val2 = temp.length();
+        const double val3 = val1 * val1 - val2 * val2 + radius * radius;
+
+        if (val3 < 0) {
+            return false;
+        }
+
+        // compute distance
+        const double dist1 = -val1 + sqrt(val3);
+        const double dist2 = -val1 - sqrt(val3);
+
+        if (dist1 < 0 || dist2 < 0) {
+            dist = max(dist1, dist2);
+        } else if (dist1 > 0 && dist2 > 0) {
+            dist = min(dist1, dist2);
+        }
+        normal = getNormal(ray.getPoint(dist));
+
+        return dist > EPS;      //  neg. dist are behind ray; eps is for not hitting itself
+    }
+
+    virtual Vec3d
+    getNormal(const Vec3d& P) const override {
+        // src: https://cs.colorado.edu/~mcbryan/5229.03/mail/110.htm
+        Vec3d n{P - center};
+        n /= radius;
+        return n;
+    }
+};
+
 struct Model : Primitive {
     vector<Triangle> faces;
+    Sphere bbvol;
 
-    Model(const Color& color, const vector<Triangle>& faces) : Primitive(color), faces(faces) {}
-    Model(const Material& material, const vector<Triangle>& faces) : Primitive(material), faces(faces) {}
+    Model(const Color& color, const vector<Triangle>& faces) : Primitive(color), faces(faces) { updateBBVol(); }
+    Model(const Material& material, const vector<Triangle>& faces) : Primitive(material), faces(faces) { updateBBVol(); }
     Model(const Color& color) : Primitive(color) {}
     Model(const Material& material) : Primitive(material) {}
-
     Model() {}
+
+    void
+    updateBBVol() {
+        Vec3d center{0,0,0};
+        double radius{0}, tmp{0};
+        const unsigned int numVertices{faces.size()*3};
+        for (const auto& f : faces) {
+            const Vec3d v0{f.v0};
+            const Vec3d v1{f.v1};
+            const Vec3d v2{f.v2};
+            center += v0;
+            center += v1;
+            center += v2;
+        }
+        center /= numVertices;
+        for (const auto& f : faces) {
+            const Vec3d v0{f.v0};
+            const Vec3d v1{f.v1};
+            const Vec3d v2{f.v2};
+            tmp = (center - v0).length();
+            if (tmp > radius) {
+                radius = tmp;
+            }
+            tmp = (center - v1).length();
+            if (tmp > radius) {
+                radius = tmp;
+            }
+            tmp = (center - v2).length();
+            if (tmp > radius) {
+                radius = tmp;
+            }
+        }
+        bbvol = Sphere{center, radius, Color{0}};
+    }
 
     static shared_ptr<Model> load_ply(const string& fname, const Material& material, bool calcNormal=false) {
         cout << "... loading model: " << fname << endl;
@@ -871,6 +949,7 @@ struct Model : Primitive {
             const unsigned int iv0{fixd[0]};
             const unsigned int iv1{fixd[1]};
             const unsigned int iv2{fixd[2]};
+
             if (calcNormal) {
                 faces.emplace_back(Triangle{vertices[iv0], vertices[iv1], vertices[iv2],
                                  normals[iv0], normals[iv1], normals[iv2], material});
@@ -888,6 +967,12 @@ struct Model : Primitive {
         Vec3d tmpnormal;
         dist = std::numeric_limits<double>::max();
         bool hit{false};
+//        if (!bbvol.intersect(ray, tmpdist, tmpnormal)) {
+//            return false;
+//        }
+//        hit = true;
+//        normal = tmpnormal;
+//        dist = tmpdist;
         for (const auto& f : faces) {
             if (f.intersect(ray, tmpdist, tmpnormal) && tmpdist < dist) {
                 dist = tmpdist;
@@ -902,6 +987,8 @@ struct Model : Primitive {
         for (auto& f : faces) {
             f.scale(s);
         }
+//        bbvol.radius *= s;
+        updateBBVol();
         return *this;
     }
 
@@ -924,6 +1011,7 @@ struct Model : Primitive {
         for (auto& f : faces) {
             f += rhs;
         }
+        bbvol.center += rhs;
         return *this;
     }
 
@@ -936,56 +1024,6 @@ Model operator+(Model lhs, const Vec3d& rhs) {
 Model operator*(Model lhs, const Mat3d& rhs) {
     return lhs *= rhs;
 }
-
-
-/** The most common object to be rendered in a raytracer
- *
- */
-struct Sphere : public Primitive {
-    // define location + radius
-    Vec3d center;
-    double radius;
-
-    Sphere(const Vec3d& c, double r, const Color& color) : center{c}, radius{r}, Primitive{color} {}
-    Sphere(const Vec3d& c, double r, const Material& material) : center{c}, radius{r}, Primitive{material} {}
-
-    // get intersection with ray: refer: https://en.wikipedia.org/wiki/Line%E2%80%93sphere_intersection
-    // more details: https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rendering-simple-shapes/ray-sphere-intersection
-    virtual bool
-    intersect(const Ray& ray, double& dist, Vec3d& normal) const override {
-        // (l * (o - c))^2 - || o - c ||^2 + r^2
-        double val1, val2, val3, dist1, dist2;
-        const Vec3d temp{ray.origin - center};
-        val1 = temp.dotProduct(ray.direction);
-        val2 = temp.length();
-        val3 = val1 * val1 - val2 * val2 + radius * radius;
-
-        if (val3 < 0) {
-            return false;
-        }
-
-        // compute distance
-        dist1 = -temp.dotProduct(ray.direction) + sqrt(val3);
-        dist2 = -temp.dotProduct(ray.direction) - sqrt(val3);
-
-        if (dist1 < 0 || dist2 < 0) {
-            dist = max(dist1, dist2);
-        } else if (dist1 > 0 && dist2 > 0) {
-            dist = min(dist1, dist2);
-        }
-        normal = getNormal(ray.getPoint(dist));
-
-        return dist > EPS;      //  neg. dist are behind ray; eps is for not hitting itself
-    }
-
-    virtual Vec3d
-    getNormal(const Vec3d& P) const override {
-        // src: https://cs.colorado.edu/~mcbryan/5229.03/mail/110.htm
-        Vec3d n{P - center};
-        n /= radius;
-        return n;
-    }
-};
 
 struct Light {
     Vec3d pos;
@@ -1110,9 +1148,12 @@ void check_op_overloading() {
 
 void
 create_box(vector<shared_ptr<Primitive>>& objects) {
-    const int y_offset{-3};
-    const int x_offset{2};
-    const int z_offset{-9};
+//    const int y_offset{-3};
+//    const int x_offset{2};
+//    const int z_offset{-9};
+    const int y_offset{0};
+    const int x_offset{0};
+    const int z_offset{-5};
 
     const int x_width_half{1};
     const int y_width_half{1};
@@ -1512,20 +1553,20 @@ create_scene(vector<shared_ptr<Primitive>>& objects, vector<Light>& lights) {
 //    objects.push_back(make_shared<Sphere>(Vec3d{0, 1, -3}, 0.5, glass));
     objects.push_back(make_shared<Sphere>(Vec3d{-2.5, 2, -5}, 1, Material{Color{1, 0, 1}, 0.2, 0.5, 0.7}));
 
-    create_box(objects);
+//    create_box(objects);
     const string mesh_root{"/home/chris/shared/github/chris/raytracer/data/3d_meshes/"};
     string bunny_res4_path{mesh_root + "bunny/reconstruction/bun_zipper_res4.ply"};
     string bunny_res2_path{mesh_root + "bunny/reconstruction/bun_zipper_res2.ply"};
     string bunny_path{mesh_root + "bunny/reconstruction/bun_zipper.ply"};
     shared_ptr<Model> bunny{Model::load_ply(bunny_path, porcelain, true)};     // glass bunny
 //    shared_ptr<Model> bunny{Model::load_ply(bunny_path, Material(Color::white(), 0.2, 0.5, 0.8, 0.2))};
-    *bunny *= Mat3d::rotation(M_PI / 8, M_PI / 6, 0);
+//    *bunny *= Mat3d::rotation(M_PI / 8, M_PI / 6, 0);
 //    *bunny *= Mat3d::rotationX(M_PI/6);
 //    *bunny *= Mat3d::rotationZ(M_PI/2);
 //    *bunny *= Mat3d::rotationY(M_PI/4);
     bunny->scale(20);
     *bunny += Vec3d{-1.5, -3, -6};
-    objects.push_back(bunny);
+    objects.emplace_back(bunny);
 
 
 //    string draon_res4_path{mesh_root+"dragon_recon/dragon_vrip_res4.ply"};
