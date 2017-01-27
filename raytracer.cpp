@@ -966,9 +966,9 @@ struct Model : Primitive {
         Vec3d tmpnormal;
         dist = std::numeric_limits<double>::max();
         bool hit{false};
-//        if (!bbvol.intersect(ray, tmpdist, tmpnormal)) {
-//            return false;
-//        }
+        if (!bbvol.intersect(ray, tmpdist, tmpnormal)) {
+            return false;
+        }
 //        hit = true;
 //        normal = tmpnormal;
 //        dist = tmpdist;
