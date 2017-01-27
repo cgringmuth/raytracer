@@ -379,10 +379,10 @@ struct Color {
 
     double r, g, b;
 
-    Color() : r{0}, g{0}, b{0} {};
-    explicit Color(const double v) : r{v}, g{v}, b{v} {};
+    Color() : Color{0} {};
+    explicit Color(const double v) : Color{v,v,v} {};
+    Color(const Color& color) : Color{color.r, color.g, color.b} {};
     Color(double r, double g, double b) : r{r}, g{g}, b{b} {};
-    Color(const Color& color) : r{color.r}, g{color.g}, b{color.b} {};
 
     Color& operator/=(double d) {
         r /= d;
@@ -581,7 +581,6 @@ struct Plane : public Primitive {
         this->b = pn[1];
         this->c = pn[2];
     }
-
 
     Plane(Vec3d normal, double dist, const Color& color) : d{dist}, Primitive{color} {
         normal.normalize(); // make sure normal is normalized
@@ -1029,9 +1028,9 @@ struct Light {
     Vec3d pos;
     Color color;
 
+    Light(Vec3d pos) : Light{pos, color} {}
     Light(Vec3d pos, Color color) : pos{pos}, color{color} {}
 
-    Light(Vec3d pos) : pos{pos}, color{Color::white()} {}
 };
 
 
@@ -1052,13 +1051,11 @@ struct Camera {
     vector<Point2D> antiAliasingPattern;
 
 
+    Camera(double aspectRatio, double fov, unsigned int imWidth, unsigned int imHeight) :
+            Camera{Vec3d{0,0,0}, Vec3d{0,1,0}, Vec3d{0,0,-1}, aspectRatio, fov, imWidth, imHeight} {}
     Camera(const Vec3d& eye, const Vec3d& up, const Vec3d& at, double aspectRatio, double fov, unsigned int imWidth,
            unsigned int imHeight) : eye(eye), up(up), at(at), right(cross_product(at, up)), aspectRatio(aspectRatio), fov(fov), imWidth(imWidth),
                                 imHeight(imHeight) { antiAliasingPattern = defaultAntiAliasingPattern(); }
-
-    Camera(double aspectRatio, double fov, unsigned int imWidth, unsigned int imHeight) :
-            eye(Vec3d{0,0,0}), up(Vec3d{0,1,0}), at(Vec3d{0,0,-1}), right(cross_product(at, up)), aspectRatio(aspectRatio), fov(fov), imWidth(imWidth),
-                                  imHeight(imHeight) { antiAliasingPattern = defaultAntiAliasingPattern(); }
 
     static
     vector<Point2D> defaultAntiAliasingPattern() {
@@ -1112,7 +1109,6 @@ struct Camera {
     }
 };
 
-class light_blue;
 
 ostream&
 operator<<(ostream& os, const Color& c) {
