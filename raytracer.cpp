@@ -225,10 +225,8 @@ struct Vec3d {
     }
 
     Vec3d& operator/=(const double v) {
-        x /= v;
-        y /= v;
-        z /= v;
-        return *this;
+        const double invV{1/v};
+        return *this*=invV;
     }
 
     Vec3d& operator+=(const Vec3d& rhs) {
@@ -295,8 +293,7 @@ struct Vec3d {
     }
 
     Vec3d& normalize() {
-        *this /= length();
-        return *this;
+        return *this *= 1/length();
     }
 
     Vec3d cross_product(const Vec3d& v) const;
@@ -385,10 +382,8 @@ struct Color {
     Color(double r, double g, double b) : r{r}, g{g}, b{b} {};
 
     Color& operator/=(double d) {
-        r /= d;
-        g /= d;
-        b /= d;
-        return *this;
+        const double invD{1/d};
+        return *this*=invD;
     }
 
     Color& operator*=(double d) {
@@ -1074,8 +1069,8 @@ struct Camera {
     Ray getCamRay(const double x, const double y) const {
         const double px_ndc{x / imWidth};
         const double py_ndc{y / imHeight};
-        const double cam_x{(2 * px_ndc - 1) * aspectRatio * tan(deg2rad(fov) / 2)};
-        const double cam_y{(1 - 2 * py_ndc) * tan(deg2rad(fov) / 2)};
+        const double cam_x{(2 * px_ndc - 1) * aspectRatio * tan(deg2rad(fov) * 0.5)};
+        const double cam_y{(1 - 2 * py_ndc) * tan(deg2rad(fov) * 0.5)};
         Vec3d camDir{right * cam_x + up * cam_y + at};
         camDir.normalize();
 
@@ -1287,9 +1282,9 @@ preview(cv::Mat& img, unsigned int& finPix, unsigned int sumPix, int delay = 100
         cv::Rect roi{x, y, textSize.width+border, textSize.height+border};
         cv::Mat foo{roi.height, roi.width, tmpimg.type(), cv::Scalar::all(130)};
         cv::Mat cropped{tmpimg(roi)};
-        cv::putText(foo, text, cv::Point{border/2, textSize.height+border/2-2}, fontFace, fontScale, color, thickness+2);
+        cv::putText(foo, text, cv::Point{(int)(border * 0.5), (int)(textSize.height+border * 0.5) -2}, fontFace, fontScale, color, thickness+2);
         cv::addWeighted(cropped, alpha, foo, 1-alpha, 0, cropped);
-        cv::putText(cropped, text, cv::Point{border/2, textSize.height+border/2-2}, fontFace, fontScale, color*0.5, thickness);
+        cv::putText(cropped, text, cv::Point{(int)(border * 0.5), (int)(textSize.height+border * 0.5) -2}, fontFace, fontScale, color*0.5, thickness);
 
         cv::imshow(winName, tmpimg);
         key = cv::waitKey(delay);
