@@ -54,7 +54,7 @@
  * Back-face culling basically leads some performance improvements. But it only works properly with solid objects.
  * Hence, shadows might not be rendered correctly when CULLING is turned on and you want to render hulls instead
  * of solid objects. This is why it is turned of per default.
- * Refer to https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/single-vs-double-sided-triangle-backface-culling
+ * Refer to https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/single-vs-Float-sided-triangle-backface-culling
  * to reader more.
  */
 #ifndef CULLING
@@ -78,13 +78,13 @@ class Timer
 public:
     Timer() : beg_(clock_::now()) {}
     void reset() { beg_ = clock_::now(); }
-    double elapsed() const {
+    Float elapsed() const {
         return std::chrono::duration_cast<second_>
                 (clock_::now() - beg_).count(); }
 
 private:
     typedef std::chrono::high_resolution_clock clock_;
-    typedef std::chrono::duration<double, std::ratio<1> > second_;
+    typedef std::chrono::duration<Float, std::ratio<1> > second_;
     std::chrono::time_point<clock_> beg_;
 };
 
@@ -92,7 +92,7 @@ bool processing{true};
 const string winName{"image"};
 typedef unsigned char ImageType;
 Timer timer;
-constexpr double EPS{0.000001};
+constexpr Float EPS{0.000001};
 constexpr int MAX_DEPTH{10};
 mutex RENDER_MUTEX;
 
@@ -102,37 +102,37 @@ mutex RENDER_MUTEX;
  * @param ang angle in degree
  * @return angle in rad
  */
-double deg2rad(double ang) {
+Float deg2rad(Float ang) {
     return ang * M_PI / 180;
 }
 
 
 struct Mat3d {
-    double v[9];
+    Float v[9];
     static const unsigned int width{3};
     static const unsigned int height{3};
 
-    Mat3d(double v0, double v1, double v2,
-          double v3, double v4, double v5,
-          double v6, double v7, double v8) {
+    Mat3d(Float v0, Float v1, Float v2,
+          Float v3, Float v4, Float v5,
+          Float v6, Float v7, Float v8) {
         v[0] = v0; v[1] = v1; v[2] = v2;
         v[3] = v3; v[4] = v4; v[5] = v5;
         v[6] = v6; v[7] = v7; v[8] = v8;
     }
 
     Mat3d(const Mat3d& mat) : Mat3d{mat.v} { }
-    Mat3d(const double* v) {
-        memcpy(this->v, v, sizeof(double)*length());
+    Mat3d(const Float* v) {
+        memcpy(this->v, v, sizeof(Float)*length());
     }
 
-    double& at(unsigned int x, unsigned int y) { return v[y*width + x]; }
-    double at(unsigned int x, unsigned int y) const { return v[y*width + x]; }
+    Float& at(unsigned int x, unsigned int y) { return v[y*width + x]; }
+    Float at(unsigned int x, unsigned int y) const { return v[y*width + x]; }
 
-    double& operator[](size_t idx) {
+    Float& operator[](size_t idx) {
         return v[idx];
     }
 
-    double operator[](size_t idx) const {
+    Float operator[](size_t idx) const {
         return v[idx];
     }
 
@@ -152,32 +152,32 @@ struct Mat3d {
         return *this;
     }
 
-    static Mat3d rotation(double phiX, double phiY, double phiZ);
+    static Mat3d rotation(Float phiX, Float phiY, Float phiZ);
 
-    static Mat3d rotationX(double phi) {
-        double vmat[9];
-        const double cosphi{cos(phi)};
-        const double sinphi{sin(phi)};
+    static Mat3d rotationX(Float phi) {
+        Float vmat[9];
+        const Float cosphi{cos(phi)};
+        const Float sinphi{sin(phi)};
         vmat[0] = 1; vmat[1] = 0;      vmat[2] = 0;
         vmat[3] = 0; vmat[4] = cosphi; vmat[5] = -sinphi;
         vmat[6] = 0; vmat[7] = sinphi; vmat[8] = cosphi;
         return Mat3d{vmat};
     }
 
-    static Mat3d rotationY(double phi) {
-        double vmat[9];
-        const double cosphi{cos(phi)};
-        const double sinphi{sin(phi)};
+    static Mat3d rotationY(Float phi) {
+        Float vmat[9];
+        const Float cosphi{cos(phi)};
+        const Float sinphi{sin(phi)};
         vmat[0] = cosphi;  vmat[1] = 0; vmat[2] = sinphi;
         vmat[3] = 0;       vmat[4] = 1; vmat[5] = 0;
         vmat[6] = -sinphi; vmat[7] = 0; vmat[8] = cosphi;
         return Mat3d{vmat};
     }
 
-    static Mat3d rotationZ(double phi) {
-        double vmat[9];
-        const double cosphi{cos(phi)};
-        const double sinphi{sin(phi)};
+    static Mat3d rotationZ(Float phi) {
+        Float vmat[9];
+        const Float cosphi{cos(phi)};
+        const Float sinphi{sin(phi)};
         vmat[0] = cosphi;  vmat[1] = -sinphi; vmat[2] = 0;
         vmat[3] = sinphi;  vmat[4] = cosphi;  vmat[5] = 0;
         vmat[6] = 0;       vmat[7] = 0;       vmat[8] = 1;
@@ -189,7 +189,7 @@ Mat3d operator*(Mat3d lhs, const Mat3d& rhs) {
     return lhs *= rhs;
 }
 
-Mat3d Mat3d::rotation(double phiX, double phiY, double phiZ) {
+Mat3d Mat3d::rotation(Float phiX, Float phiY, Float phiZ) {
     return Mat3d::rotationZ(phiZ) * Mat3d::rotationY(phiY) * Mat3d::rotationX(phiX);
 }
 
@@ -211,7 +211,7 @@ struct Vec3 {
 
     Vec3() : Vec3<T>{0,0,0} {}
     Vec3(const Vec3<T>& v) : Vec3<T>{v.x, v.y, v.z} {}
-    Vec3(double x, double y, double z) : x{x}, y{y}, z{z} {}
+    Vec3(Float x, Float y, Float z) : x{x}, y{y}, z{z} {}
 
     Vec3<T> operator-() const {
         Vec3<T> v;
@@ -229,7 +229,7 @@ struct Vec3 {
     }
 
     Vec3<T>& operator/=(const T v) {
-        const double invV{1.0/v};
+        const Float invV{1.0/v};
         return *this*=invV;
     }
 
@@ -255,9 +255,9 @@ struct Vec3 {
     }
 
     Vec3& operator*=(const Mat3d& mat) {
-        double tx{x*mat.at(0,0) + y*mat.at(1,0) + z*mat.at(2, 0)};
-        double ty{x*mat.at(0,1) + y*mat.at(1,1) + z*mat.at(2, 1)};
-        double tz{x*mat.at(0,2) + y*mat.at(1,2) + z*mat.at(2, 2)};
+        Float tx{x*mat.at(0,0) + y*mat.at(1,0) + z*mat.at(2, 0)};
+        Float ty{x*mat.at(0,1) + y*mat.at(1,1) + z*mat.at(2, 1)};
+        Float tz{x*mat.at(0,2) + y*mat.at(1,2) + z*mat.at(2, 2)};
         x = tx;
         y = ty;
         z = tz;
@@ -323,7 +323,7 @@ Vec3<T> operator-(Vec3<T> lhs, const Vec3<T>& rhs) {
 }
 
 template <typename T>
-Vec3<T> operator/(Vec3<T> lhs, const double v) {
+Vec3<T> operator/(Vec3<T> lhs, const Float v) {
     return lhs /= v;
 }
 
@@ -333,23 +333,23 @@ Vec3<T> operator+(Vec3<T> lhs, const Vec3<T>& rhs) {
 }
 
 template <typename T>
-Vec3<T> operator+(Vec3<T> lhs, const double d) {
+Vec3<T> operator+(Vec3<T> lhs, const Float d) {
     return lhs += d;
 }
 
 template <typename T>
-Vec3<T> operator*(Vec3<T> lhs, const double val) {
+Vec3<T> operator*(Vec3<T> lhs, const Float val) {
     return lhs *= val;
 }
 
 template <typename T>
-Vec3<T> operator*(const double val, Vec3<T> lhs) {
+Vec3<T> operator*(const Float val, Vec3<T> lhs) {
     return lhs *= val;
 }
 
 
 template <typename T>
-double dotProduct(const Vec3<T>& v1, const Vec3<T>& v2) {
+Float dotProduct(const Vec3<T>& v1, const Vec3<T>& v2) {
     return v1.dotProduct(v2);
 }
 
@@ -388,19 +388,19 @@ typedef Vec3<Float> Vec3f;
  */
 struct Color {
 
-    double r, g, b;
+    Float r, g, b;
 
     Color() : Color{0} {};
-    explicit Color(const double v) : Color{v,v,v} {};
+    explicit Color(const Float v) : Color{v,v,v} {};
     Color(const Color& color) : Color{color.r, color.g, color.b} {};
-    Color(double r, double g, double b) : r{r}, g{g}, b{b} {};
+    Color(Float r, Float g, Float b) : r{r}, g{g}, b{b} {};
 
-    Color& operator/=(double d) {
-        const double invD{1/d};
+    Color& operator/=(Float d) {
+        const Float invD{1/d};
         return *this*=invD;
     }
 
-    Color& operator*=(double d) {
+    Color& operator*=(Float d) {
         r *= d;
         g *= d;
         b *= d;
@@ -421,7 +421,7 @@ struct Color {
         return *this;
     }
 
-    Color& clamp(double min, double max) {
+    Color& clamp(Float min, Float max) {
         r = ::clamp(min, max, r);
         g = ::clamp(min, max, g);
         b = ::clamp(min, max, b);
@@ -473,7 +473,7 @@ struct Color {
 
 };
 
-Color operator/(Color lhs, const double d) {
+Color operator/(Color lhs, const Float d) {
     return lhs /= d;
 }
 
@@ -481,11 +481,11 @@ Color operator+(Color lhs, const Color& rhs) {
     return lhs += rhs;
 }
 
-Color operator*(Color lhs, const double d) {
+Color operator*(Color lhs, const Float d) {
     return lhs *= d;
 }
 
-Color operator*(const double d, Color rhs) {
+Color operator*(const Float d, Color rhs) {
     return rhs *= d;
 }
 
@@ -505,7 +505,7 @@ struct Ray {
 
     Ray(Vec3f o, Vec3f d) : origin{o}, direction{d} {}
 
-    Vec3f getPoint(double dist) const {
+    Vec3f getPoint(Float dist) const {
         return origin + (direction * dist);
     }
 };
@@ -514,14 +514,14 @@ struct Ray {
 
 struct Material {
     Color color;
-    double ka;  // ambient reflectance
-    double kd;  // diffuse reflectance
+    Float ka;  // ambient reflectance
+    Float kd;  // diffuse reflectance
 
-    double ks;  // specular reflectance
-    double specRefExp; // specular-reflection exponent
+    Float ks;  // specular reflectance
+    Float specRefExp; // specular-reflection exponent
 
     bool reflective;
-    double kr;  // reflectance coefficient
+    Float kr;  // reflectance coefficient
 
     bool refractive;
     /** The refraction coefficient. This is the coefficient for this material
@@ -537,14 +537,14 @@ struct Material {
      *
      * Assuming air has n=1.0
      */
-    double refractiveIdx;
-    double kt;  // transimission coefficient (the amount of light which it can pass through object)
+    Float refractiveIdx;
+    Float kt;  // transimission coefficient (the amount of light which it can pass through object)
 
-    Material(const Color& color, double ka=0.2, double kd=0.7, double ks=0.2, double kr=0, double kt=0, double specRefExp=8,
-             double refractiveIdx=0, bool reflective=false, bool refractive=false)
+    Material(const Color& color, Float ka=0.2, Float kd=0.7, Float ks=0.2, Float kr=0, Float kt=0, Float specRefExp=8,
+             Float refractiveIdx=0, bool reflective=false, bool refractive=false)
             : color(color), ka(ka), kd(kd), ks(ks), specRefExp(specRefExp), kr(kr), refractiveIdx(refractiveIdx)
             , reflective(reflective), refractive(refractive), kt{kt} {}
-    Material(double ka=0.2, double kd=0.7, double ks=0.2, double kr=0, double kt=0, double specRefExp=8, double refractiveIdx=0,
+    Material(Float ka=0.2, Float kd=0.7, Float ks=0.2, Float kr=0, Float kt=0, Float specRefExp=8, Float refractiveIdx=0,
              bool reflective=false, bool refractive=false)
             : color{}, ka(ka), kd(kd), ks(ks), specRefExp(specRefExp), kr(kr), refractiveIdx(refractiveIdx),
               reflective(reflective), refractive(refractive), kt{kt} {}
@@ -561,7 +561,7 @@ struct Primitive {
     Primitive(const Material& material) : material(material) {}
     Primitive() : material{} {}
 
-    virtual bool intersect(const Ray& ray, double& dist, Vec3f& normal) const = 0;
+    virtual bool intersect(const Ray& ray, Float& dist, Vec3f& normal) const = 0;
 
     virtual Vec3f getNormal(const Vec3f& vec) const = 0;
 
@@ -569,9 +569,9 @@ struct Primitive {
 
 
 struct Plane : public Primitive {
-    double a, b, c, d;  // implicit description: ax + by + cz + d = 0
+    Float a, b, c, d;  // implicit description: ax + by + cz + d = 0
 
-    Plane(double a, double b, double c, double d, const Color& color)
+    Plane(Float a, Float b, Float c, Float d, const Color& color)
             : a(a), b(b), c(c), d(d), Primitive(color) {
         // normalize normal vector
         Vec3f pn{a, b, c};
@@ -581,7 +581,7 @@ struct Plane : public Primitive {
         this->c = pn[2];
     }
 
-    Plane(double a, double b, double c, double d, const Material& material)
+    Plane(Float a, Float b, Float c, Float d, const Material& material)
             : a(a), b(b), c(c), d(d), Primitive(material) {
         // normalize normal vector
         Vec3f pn{a, b, c};
@@ -591,24 +591,24 @@ struct Plane : public Primitive {
         this->c = pn[2];
     }
 
-    Plane(Vec3f normal, double dist, const Color& color) : d{dist}, Primitive{color} {
+    Plane(Vec3f normal, Float dist, const Color& color) : d{dist}, Primitive{color} {
         normal.normalize(); // make sure normal is normalized
         a = normal[0];
         b = normal[1];
         c = normal[2];
     }
 
-    bool intersect(const Ray& ray, double& dist, Vec3f& normal) const override {
+    bool intersect(const Ray& ray, Float& dist, Vec3f& normal) const override {
         //src: https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/ray-triangle-intersection-geometric-solution
         normal = Vec3f{a, b, c};
-        const double vd{normal.dotProduct(ray.direction)};
+        const Float vd{normal.dotProduct(ray.direction)};
 
         if (abs(vd) < EPS)  // check if vd is 0 -> plane and ray parallel
             false;
         if (vd > 0)     // normal of plane is pointing away from camera (maybe handle differently)
             false;
 
-        const double vo{normal.dotProduct(ray.origin) + d};
+        const Float vo{normal.dotProduct(ray.origin) + d};
         dist = -vo / vd;
 
         return dist > EPS;
@@ -631,7 +631,7 @@ struct Triangle : public Primitive {
              const Material material=Material{})
             : v0{v0}, v1{v1}, v2{v2}, Primitive{material}, n0{n0}, n1{n1}, n2{n2} { }
 
-    virtual bool intersect(const Ray& ray, double& dist, Vec3f& normal) const override {
+    virtual bool intersect(const Ray& ray, Float& dist, Vec3f& normal) const override {
         normal = this->n1;
 #if MT_TRIANGLE_INTERSECT==1
         // src: http://www.cs.virginia.edu/%7Egfx/Courses/2003/ImageSynthesis/papers/Acceleration/Fast%20MinimumStorage%20RayTriangle%20Intersection.pdf
@@ -643,7 +643,7 @@ struct Triangle : public Primitive {
         const Vec3f v0v1{v1-v0};    // edge 1 from v0 to v1
         const Vec3f v0v2{v2-v0};    // edge 2 from v0 to v2
         const Vec3f pVec{ray.direction.cross_product(v0v2)};
-        const double det{pVec.dotProduct(v0v1)};
+        const Float det{pVec.dotProduct(v0v1)};
 
         // if determinant is negative, triangle is backfacing
         // if determinant is close to 0, ray is missing triangle
@@ -654,17 +654,17 @@ struct Triangle : public Primitive {
         if (abs(det) < EPS)
             return false;
 #endif
-        const double invDet = 1 / det;
+        const Float invDet = 1 / det;
 
         // calc u
         const Vec3f tVec{ray.origin-v0};
-        const double u{invDet * pVec.dotProduct(tVec)};
+        const Float u{invDet * pVec.dotProduct(tVec)};
         if (u < 0 || u > 1)
             return false;
 
         // calc v
         const Vec3f qVec{tVec.cross_product(v0v1)};
-        const double v{invDet * qVec.dotProduct(ray.direction)};
+        const Float v{invDet * qVec.dotProduct(ray.direction)};
         if (v < 0 || u+v > 1)
             return false;
 
@@ -732,13 +732,13 @@ struct Triangle : public Primitive {
         return n0;
     }
 
-    void scale(double s) {
+    void scale(Float s) {
         v0 *= s;
         v1 *= s;
         v2 *= s;
     }
 
-    Triangle& operator+=(const double t) {
+    Triangle& operator+=(const Float t) {
         v0 += t;
         v1 += t;
         v2 += t;
@@ -763,7 +763,7 @@ struct Triangle : public Primitive {
     }
 };
 
-Triangle operator+(Triangle lhs, const double t) {
+Triangle operator+(Triangle lhs, const Float t) {
     return lhs += t;
 }
 
@@ -786,29 +786,29 @@ ostream& operator<<(ostream& os, vector<T> vec) {
 struct Sphere : public Primitive {
     // define location + radius
     Vec3f center;
-    double radius;
+    Float radius;
 
-    Sphere(const Vec3f& c, double r, const Color& color) : center{c}, radius{r}, Primitive{color} {}
-    Sphere(const Vec3f& c, double r, const Material& material) : center{c}, radius{r}, Primitive{material} {}
+    Sphere(const Vec3f& c, Float r, const Color& color) : center{c}, radius{r}, Primitive{color} {}
+    Sphere(const Vec3f& c, Float r, const Material& material) : center{c}, radius{r}, Primitive{material} {}
     Sphere() {}
 
     // get intersection with ray: refer: https://en.wikipedia.org/wiki/Line%E2%80%93sphere_intersection
     // more details: https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rendering-simple-shapes/ray-sphere-intersection
     virtual bool
-    intersect(const Ray& ray, double& dist, Vec3f& normal) const override {
+    intersect(const Ray& ray, Float& dist, Vec3f& normal) const override {
         // (l * (o - c))^2 - || o - c ||^2 + r^2
         const Vec3f temp{ray.origin - center};
-        const double val1 = temp.dotProduct(ray.direction);
-        const double val2 = temp.length();
-        const double val3 = val1 * val1 - val2 * val2 + radius * radius;
+        const Float val1 = temp.dotProduct(ray.direction);
+        const Float val2 = temp.length();
+        const Float val3 = val1 * val1 - val2 * val2 + radius * radius;
 
         if (val3 < 0) {
             return false;
         }
 
         // compute distance
-        const double dist1 = -val1 + sqrt(val3);
-        const double dist2 = -val1 - sqrt(val3);
+        const Float dist1 = -val1 + sqrt(val3);
+        const Float dist2 = -val1 - sqrt(val3);
 
         if (dist1 < 0 || dist2 < 0) {
             dist = max(dist1, dist2);
@@ -842,7 +842,7 @@ struct Model : Primitive {
     void
     updateBBVol() {
         Vec3f center{0,0,0};
-        double radius{0}, tmp{0};
+        Float radius{0}, tmp{0};
         const unsigned int numVertices{faces.size()*3};
         for (const auto& f : faces) {
             const Vec3f v0{f.v0};
@@ -917,7 +917,7 @@ struct Model : Primitive {
         for (int i = 0; i < nvertices; ++i) {
             getline(ifs, line);
             stringstream ss{line};
-            double x, y, z;
+            Float x, y, z;
             ss >> x >> y >> z;
             vertices.emplace_back(Vec3f{x, y, z});
         }
@@ -969,11 +969,11 @@ struct Model : Primitive {
         return make_shared<Model>(material, faces);
     }
 
-    bool intersect(const Ray& ray, double& dist, Vec3f& normal) const override {
+    bool intersect(const Ray& ray, Float& dist, Vec3f& normal) const override {
         // todo: through all faces and give closest distance which is not negative and return normal also (for all)
-        double tmpdist;
+        Float tmpdist;
         Vec3f tmpnormal;
-        dist = std::numeric_limits<double>::max();
+        dist = std::numeric_limits<Float>::max();
         bool hit{false};
         if (!bbvol.intersect(ray, tmpdist, tmpnormal)) {
             return false;
@@ -991,7 +991,7 @@ struct Model : Primitive {
         return hit && dist > EPS;
     }
 
-    Model& scale(double s) {
+    Model& scale(Float s) {
         for (auto& f : faces) {
             f.scale(s);
         }
@@ -1048,21 +1048,21 @@ struct Camera {
     Vec3f up;   // up direction (usually [0,1,0])
     Vec3f right;
     Vec3f at;   // Look at direction
-    double aspectRatio;
-    double fov;     // field of view
+    Float aspectRatio;
+    Float fov;     // field of view
     unsigned int imWidth;
     unsigned int imHeight;
 
-    struct Point2D { double x, y;
+    struct Point2D { Float x, y;
         Point2D() : x{0}, y{0} {}
-        Point2D(double x, double y) : x{x}, y{y} {}
+        Point2D(Float x, Float y) : x{x}, y{y} {}
     };
     vector<Point2D> antiAliasingPattern;
 
 
-    Camera(double aspectRatio, double fov, unsigned int imWidth, unsigned int imHeight) :
+    Camera(Float aspectRatio, Float fov, unsigned int imWidth, unsigned int imHeight) :
             Camera{Vec3f{0,0,0}, Vec3f{0,1,0}, Vec3f{0,0,-1}, aspectRatio, fov, imWidth, imHeight} {}
-    Camera(const Vec3f& eye, const Vec3f& up, const Vec3f& at, double aspectRatio, double fov, unsigned int imWidth,
+    Camera(const Vec3f& eye, const Vec3f& up, const Vec3f& at, Float aspectRatio, Float fov, unsigned int imWidth,
            unsigned int imHeight) : eye(eye), up(up), at(at), right(cross_product(at, up)), aspectRatio(aspectRatio), fov(fov), imWidth(imWidth),
                                 imHeight(imHeight) { antiAliasingPattern = defaultAntiAliasingPattern(); }
 
@@ -1080,11 +1080,11 @@ struct Camera {
         };
     }
 
-    Ray getCamRay(const double x, const double y) const {
-        const double px_ndc{x / imWidth};
-        const double py_ndc{y / imHeight};
-        const double cam_x{(2 * px_ndc - 1) * aspectRatio * tan(deg2rad(fov) * 0.5)};
-        const double cam_y{(1 - 2 * py_ndc) * tan(deg2rad(fov) * 0.5)};
+    Ray getCamRay(const Float x, const Float y) const {
+        const Float px_ndc{x / imWidth};
+        const Float py_ndc{y / imHeight};
+        const Float cam_x{(2 * px_ndc - 1) * aspectRatio * tan(deg2rad(fov) * 0.5)};
+        const Float cam_y{(1 - 2 * py_ndc) * tan(deg2rad(fov) * 0.5)};
         Vec3f camDir{right * cam_x + up * cam_y + at};
         camDir.normalize();
 
@@ -1104,7 +1104,7 @@ struct Camera {
         return rays;
     }
 
-    Camera& rotate(double alpha, double beta, double gamma) {
+    Camera& rotate(Float alpha, Float beta, Float gamma) {
         const Mat3d rot = Mat3d::rotation(alpha, beta, gamma);
         up *= rot; up.normalize();
         at *= rot; at.normalize();
@@ -1254,7 +1254,7 @@ void
 preview(cv::Mat& img, unsigned int& finPix, unsigned int sumPix, int delay = 1000)
 {
     int key;
-    double progress, curElapsed, lastElapsed;
+    Float progress, curElapsed, lastElapsed;
     unsigned int curFinPix{0}, lastFinPix{0};
     bool printedProgress{false};
     const unsigned int progressInterval{5};
@@ -1263,19 +1263,19 @@ preview(cv::Mat& img, unsigned int& finPix, unsigned int sumPix, int delay = 100
         cv::Mat tmpimg{img.clone()};
 //        for (int n=0; n<numProg; ++n) {
 //            curFinPix += finPixArr[n];
-//            progress += (double)(finPixArr[n])/sumPixArr[n];
+//            progress += (Float)(finPixArr[n])/sumPixArr[n];
 //        }
         progress = (float) finPix / sumPix * 100;
 
         curElapsed = timer.elapsed();
         unsigned int curFinPix{finPix};
-        const double pixPerSec{((double)(curFinPix - lastFinPix))/(curElapsed - lastElapsed)};
+        const Float pixPerSec{((Float)(curFinPix - lastFinPix))/(curElapsed - lastElapsed)};
         lastFinPix = curFinPix;
         lastElapsed = curElapsed;
         const string text{to_string((unsigned int)progress) + "%; t: " + to_string((unsigned int)curElapsed)
                           + " s; " + to_string((unsigned int) pixPerSec) + " pix/s"};
         const int fontFace{CV_FONT_HERSHEY_SIMPLEX};
-        const double fontScale{0.8};
+        const Float fontScale{0.8};
         const cv::Scalar color{0,255,0};
         const int thickness{1};
         int baseLine{0};
@@ -1283,7 +1283,7 @@ preview(cv::Mat& img, unsigned int& finPix, unsigned int sumPix, int delay = 100
         const int x{10};
         const int y{10};
         const int border{12};
-        const double alpha{0.2};
+        const Float alpha{0.2};
 
         if (!((unsigned int)progress % progressInterval) && !printedProgress){
             cout << "... " << text << endl;
@@ -1310,11 +1310,11 @@ preview(cv::Mat& img, unsigned int& finPix, unsigned int sumPix, int delay = 100
 }
 
 
-double calcDist(const vector<shared_ptr<Primitive>>& objects,
+Float calcDist(const vector<shared_ptr<Primitive>>& objects,
                 const Ray& ray,
                 Vec3f& hitNormal
 ) {
-    double dist{::std::numeric_limits<double>::max()}, tmpdist;
+    Float dist{::std::numeric_limits<Float>::max()}, tmpdist;
     Vec3f tmpnormal;
     // get closest intersection
     for (const auto& o : objects) {
@@ -1333,8 +1333,8 @@ Color
       const Color& background,
       const Ray& ray,
       int depth) {
-    double dist{::std::numeric_limits<double>::max()}, tmpdist;
-    const double bias{0.0001};   // bias origin of reflective/refractive/shadow ray a little into normal direction to adjust for precision problem
+    Float dist{::std::numeric_limits<Float>::max()}, tmpdist;
+    const Float bias{0.0001};   // bias origin of reflective/refractive/shadow ray a little into normal direction to adjust for precision problem
     Color color{background};
     Vec3f tmpnormal, hitNormal;
     Primitive* cur_obj{nullptr};
@@ -1392,11 +1392,11 @@ Color
         ++depth;
 
 
-        constexpr double REFRACTIVE_INDEX_AIR{1.0};
+        constexpr Float REFRACTIVE_INDEX_AIR{1.0};
         Vec3f refractNormal{hitNormal};
-        double cosIncedent, cosTransmission, sinSqrPhit;
-        double n1, n2, n;  // refractive index we come from (n1) and go to (n2)
-        double rCoef;    // reflective/refractive coefficient based on angle
+        Float cosIncedent, cosTransmission, sinSqrPhit;
+        Float n1, n2, n;  // refractive index we come from (n1) and go to (n2)
+        Float rCoef;    // reflective/refractive coefficient based on angle
 
         // fresnel equation
         if (curMaterial.refractive && depth<=MAX_DEPTH) {
@@ -1416,8 +1416,8 @@ Color
             sinSqrPhit = n * n * (1 - cosIncedent * cosIncedent);    // if sinSqrPhit is greater than 1 it is not valid
             if (sinSqrPhit <= 1) {
                 cosTransmission = sqrt(1-sinSqrPhit);
-                const double Rorth{(n1*cosIncedent - n2*cosTransmission)/(n1*cosIncedent + n2*cosTransmission)};
-                const double Rpar{ (n2*cosIncedent - n1*cosTransmission)/(n2*cosIncedent + n1*cosTransmission)};
+                const Float Rorth{(n1*cosIncedent - n2*cosTransmission)/(n1*cosIncedent + n2*cosTransmission)};
+                const Float Rpar{ (n2*cosIncedent - n1*cosTransmission)/(n2*cosIncedent + n1*cosTransmission)};
                 rCoef = (Rorth*Rorth + Rpar*Rpar) / 2;
             } else {
                 rCoef = 1;
@@ -1515,7 +1515,7 @@ colorize_image_tile(cv::Mat img, int num, int x_start, int y_start, int pW, int 
 {
     int baseline = 0;
     const int fontFace = CV_FONT_HERSHEY_SIMPLEX;
-    const double fontScale = 1;
+    const Float fontScale = 1;
     const int thickness = 2;
     const string text{"thread "+to_string(num)};
     const cv::Scalar bgColors[] = {cv::Scalar{0, 0, 255},
@@ -1699,8 +1699,8 @@ main(int argc, char** argv) {
 //    constexpr unsigned int H = 250;
 //    constexpr unsigned int W = 350;
     constexpr unsigned int MAX_VAL = 255;
-    constexpr double ASPECT_RATIO = (double) imWidth / imHeight;
-    constexpr double FOV = 60;
+    constexpr Float ASPECT_RATIO = (Float) imWidth / imHeight;
+    constexpr Float FOV = 60;
 
     Color background{0, 0.5, 0.5};
     Camera camera{Vec3f{0,0,0}, Vec3f{0,1,0}, Vec3f{0,0,-1}, ASPECT_RATIO, FOV, imWidth, imHeight};
