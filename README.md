@@ -1,5 +1,5 @@
 # raytracer
-![alt text](https://travis-ci.org/choffmann/raytracer.svg?branch=master "Logo Title Text 1")
+[![Build Status](https://travis-ci.org/choffmann/raytracer.svg?branch=master)](https://travis-ci.org/choffmann/raytracer)
 
 
 This is a small raytracer implemented from scratch.
