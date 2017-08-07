@@ -51,7 +51,7 @@
 #endif
 
 /**
- * Back-face culling basically leads some performance improvements. But it only works properly with solid objects.
+ * Back-face culling basically leads to some performance improvements. But it only works properly with solid objects.
  * Hence, shadows might not be rendered correctly when CULLING is turned on and you want to render hulls instead
  * of solid objects. This is why it is turned of per default.
  * Refer to https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/single-vs-Float-sided-triangle-backface-culling
@@ -272,6 +272,8 @@ struct Vec3 {
                 return y;
             case 2:
                 return z;
+            default:
+                return x;  // todo: add error handling
         }
     }
 
@@ -283,6 +285,8 @@ struct Vec3 {
                 return y;
             case 2:
                 return z;
+            default:
+                return x;  // todo: add error handling
         }
     }
 
@@ -538,7 +542,7 @@ struct Material {
      * Assuming air has n=1.0
      */
     Float refractiveIdx;
-    Float kt;  // transimission coefficient (the amount of light which it can pass through object)
+    Float kt;  // transmission coefficient (the amount of light which it can pass through object)
 
     Material(const Color& color, Float ka=0.2, Float kd=0.7, Float ks=0.2, Float kr=0, Float kt=0, Float specRefExp=8,
              Float refractiveIdx=0, bool reflective=false, bool refractive=false)
@@ -831,6 +835,8 @@ struct Sphere : public Primitive {
 
 struct Model : Primitive {
     vector<Triangle> faces;
+
+    /** Bounding box volume used for optimization. */
     Sphere bbvol;
 
     Model(const Color& color, const vector<Triangle>& faces) : Primitive(color), faces(faces) { updateBBVol(); }
@@ -936,7 +942,7 @@ struct Model : Primitive {
 
 
         if (calcNormal) {
-            // interpolate normals
+            // interpolate normals between all vertices
             normals.resize(vertices.size());
             for (const auto& fidx : face_idx) {
                 const Vec3f v0{vertices[fidx[0]]};
@@ -1063,8 +1069,12 @@ struct Camera {
     Camera(Float aspectRatio, Float fov, unsigned int imWidth, unsigned int imHeight) :
             Camera{Vec3f{0,0,0}, Vec3f{0,1,0}, Vec3f{0,0,-1}, aspectRatio, fov, imWidth, imHeight} {}
     Camera(const Vec3f& eye, const Vec3f& up, const Vec3f& at, Float aspectRatio, Float fov, unsigned int imWidth,
-           unsigned int imHeight) : eye(eye), up(up), at(at), right(cross_product(at, up)), aspectRatio(aspectRatio), fov(fov), imWidth(imWidth),
-                                imHeight(imHeight) { antiAliasingPattern = defaultAntiAliasingPattern(); }
+           unsigned int imHeight) : eye(eye), up(up), at(at), aspectRatio(aspectRatio), fov(fov), imWidth(imWidth),
+                                imHeight(imHeight), antiAliasingPattern(defaultAntiAliasingPattern()) {
+        this->up.normalize();
+        this->at.normalize();
+        right = cross_product(at, up);
+    }
 
     static
     vector<Point2D> defaultAntiAliasingPattern() {
@@ -1105,7 +1115,7 @@ struct Camera {
     }
 
     Camera& rotate(Float alpha, Float beta, Float gamma) {
-        const Mat3d rot = Mat3d::rotation(alpha, beta, gamma);
+        const Mat3d rot{Mat3d::rotation(alpha, beta, gamma)};
         up *= rot; up.normalize();
         at *= rot; at.normalize();
         right = cross_product(at, up);
@@ -1253,8 +1263,8 @@ create_box(vector<shared_ptr<Primitive>>& objects) {
 void
 preview(cv::Mat& img, unsigned int& finPix, unsigned int sumPix, int delay = 1000)
 {
-    int key;
-    Float progress, curElapsed, lastElapsed;
+    int key{0};
+    Float progress{0}, curElapsed{0}, lastElapsed{0};
     unsigned int curFinPix{0}, lastFinPix{0};
     bool printedProgress{false};
     const unsigned int progressInterval{5};
@@ -1394,9 +1404,9 @@ Color
 
         constexpr Float REFRACTIVE_INDEX_AIR{1.0};
         Vec3f refractNormal{hitNormal};
-        Float cosIncedent, cosTransmission, sinSqrPhit;
-        Float n1, n2, n;  // refractive index we come from (n1) and go to (n2)
-        Float rCoef;    // reflective/refractive coefficient based on angle
+        Float cosIncedent{0}, cosTransmission{0}, sinSqrPhit{0};
+        Float n1{0}, n2{0}, n{0};  // refractive index we come from (n1) and go to (n2)
+        Float rCoef{0};    // reflective/refractive coefficient based on angle
 
         // fresnel equation
         if (curMaterial.refractive && depth<=MAX_DEPTH) {
