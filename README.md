@@ -1,4 +1,7 @@
 # raytracer
+![alt text](https://travis-ci.org/choffmann/raytracer.svg?branch=master "Logo Title Text 1")
+
+
 This is a small raytracer implemented from scratch.
 
 Multi-threading is implemented. But only works with 8 threads so far. During rendering the progress will be showed, for each thread.
