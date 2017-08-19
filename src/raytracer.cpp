@@ -102,7 +102,7 @@ struct Light {
     Vec3f pos;
     Color color;
 
-    explicit Light(Vec3f pos) : Light{pos, color} {}
+    explicit Light(const Vec3f &pos) : Light{pos, color} {}
     Light(const Vec3f &pos, const Color& color) : pos{pos}, color{color} {}
 
 };
@@ -318,118 +318,121 @@ Color
     const Float bias{0.0001};   // bias origin of reflective/refractive/shadow ray a little into normal direction to adjust for precision problem
     Color color{background};
     Vec3f tmpnormal, hitNormal;
-    Primitive* cur_obj{nullptr};
+    std::shared_ptr<Primitive> cur_obj{nullptr};
 
     // get closest intersection
-    for (const auto& o : objects) {
-        if (o->intersect(ray, tmpdist, tmpnormal)) {
+    for (const auto& object : objects) {
+        if (object->intersect(ray, tmpdist, tmpnormal)) {
             if (tmpdist < dist) {
                 dist = tmpdist;
                 hitNormal = tmpnormal;
-                cur_obj = &(*o);
+                cur_obj = object;
             }
         }
     }
 
-    if (cur_obj != nullptr) {
-        color = Color(0.0);
-        const Material& curMaterial = cur_obj->material;
-        const Vec3f hitPt{ray.getPoint(dist)};
+    if (cur_obj == nullptr) {
+        return color;
+    }
 
-        // shade pixel
-        for (const auto& l : lights) {
-            Vec3f lv{l.pos - hitPt};
-            const Float ldist{lv.length()};
-            lv.normalize();
-            bool inShadow{false};
+    color = Color(0.0);
+    const Material& curMaterial = cur_obj->material;
+    const Vec3f hitPt{ray.getPoint(dist)};
 
-            // cast shadow ray and check if other object is blocking light
-            const Ray shadow_ray{hitPt + hitNormal * bias, lv};
-            for (const auto& o : objects) {
-                const bool hit{o->intersect(shadow_ray, tmpdist, tmpnormal)};
-                if (hit && tmpdist < ldist) {
-                    inShadow = true;
-                    break;
-                }
+    // shade pixel
+    for (const auto& l : lights) {
+        Vec3f lv{l.pos - hitPt};
+        const Float ldist{lv.length()};
+        lv.normalize();
+        bool inShadow{false};
+
+        // cast shadow ray and check if other object is blocking light
+        const Ray shadow_ray{hitPt + hitNormal * bias, lv};
+        for (const auto& o : objects) {
+            const bool hit{o->intersect(shadow_ray, tmpdist, tmpnormal)};
+            if (hit && tmpdist < ldist) {
+                inShadow = true;
+                break;
             }
-            if (inShadow) {
-                continue;
-            }
+        }
+        if (inShadow) {
+            continue;
+        }
 
 
-            // diffuse shading
-            const Float cosPhi{
-                    std::max<Float>(hitNormal.dotProduct(lv), 0.0)};    // todo: check why we have to clip negative values
-            color += curMaterial.color * l.color * curMaterial.kd * (cosPhi / (ldist * ldist));    // todo: change color to diffuse color
+        // diffuse shading
+        const Float cosPhi{
+                std::max<Float>(hitNormal.dotProduct(lv), 0.0)};    // todo: check why we have to clip negative values
+        color += curMaterial.color * l.color * curMaterial.kd * (cosPhi / (ldist * ldist));    // todo: change color to diffuse color
 
-            // specular shading
-            const Vec3f reflectRay{hitNormal * 2 * dotProduct(hitNormal,lv) - lv};
-            const Float cosAlpha{
-                    std::max<Float>(reflectRay.dotProduct(lv), 0.0)};    // todo: check why we have to clip negative values
-            color += l.color * curMaterial.ks * (pow(cosAlpha, curMaterial.specRefExp) / (ldist * ldist));     // todo: add reflective color here
+        // specular shading
+        const Vec3f reflectRay{hitNormal * 2 * dotProduct(hitNormal,lv) - lv};
+        const Float cosAlpha{
+                std::max<Float>(reflectRay.dotProduct(lv), 0.0)};    // todo: check why we have to clip negative values
+        color += l.color * curMaterial.ks * (pow(cosAlpha, curMaterial.specRefExp) / (ldist * ldist));     // todo: add reflective color here
 //            color.clamp(0, 1);
-        }
+    }
 
-        ++depth;
-
-
-        constexpr Float REFRACTIVE_INDEX_AIR{1.0};
-        Vec3f refractNormal{hitNormal};
-        Float cosIncedent{0}, cosTransmission{0}, sinSqrPhit{0};
-        Float n1{0}, n2{0}, n{0};  // refractive index we come from (n1) and go to (n2)
-        Float rCoef{0};    // reflective/refractive coefficient based on angle
-
-        // fresnel equation
-        if (curMaterial.refractive && depth<=MAX_DEPTH) {
-            cosIncedent = ray.direction.dotProduct(hitNormal);     // is <0 if ray hits outside object hull (ray pointing towards object)
-            if (cosIncedent < 0.0) {
-                // ray from air to object
-                n1 = REFRACTIVE_INDEX_AIR;   // assuming air other medium
-                n2 = curMaterial.refractiveIdx;
-                cosIncedent = -cosIncedent;
-            } else {
-                // ray from object to air (inside)
-                n1 = curMaterial.refractiveIdx;
-                n2 = REFRACTIVE_INDEX_AIR;   // assuming air other medium
-                refractNormal = -refractNormal;
-            }
-            n = n1/n2;
-            sinSqrPhit = n * n * (1 - cosIncedent * cosIncedent);    // if sinSqrPhit is greater than 1 it is not valid
-            if (sinSqrPhit <= 1) {
-                cosTransmission = sqrt(1-sinSqrPhit);
-                const Float Rorth{(n1*cosIncedent - n2*cosTransmission)/(n1*cosIncedent + n2*cosTransmission)};
-                const Float Rpar{ (n2*cosIncedent - n1*cosTransmission)/(n2*cosIncedent + n1*cosTransmission)};
-                rCoef = (Rorth*Rorth + Rpar*Rpar) / 2;
-            } else {
-                rCoef = 1;
-            }
-
-        }
-
-        // reflective shading recursive tracing
-        Color colorReflect{0};
-        if (curMaterial.reflective && depth <= MAX_DEPTH) {
-            const Vec3f reflectDir{-hitNormal * 2 * dotProduct(hitNormal,ray.direction) + ray.direction};
-            colorReflect = curMaterial.kr * trace(objects, lights, background, Ray{hitPt + hitNormal * bias, reflectDir}, depth);
-        }
-        // refractive shading recursive tracing
-        Color colorRefract{0};
-        if (curMaterial.refractive && depth <= MAX_DEPTH && sinSqrPhit <= 1) {
-            // if sinSqrPhit > 1.0 we cannot find a transmission vector -> we have 'total internal reflection' (TRI) or critical angle
-                // todo: handle tri and critical angle
-            const Vec3f refractDir{ray.direction * n + refractNormal * (n * cosIncedent - cosTransmission)};
-            colorRefract = curMaterial.kt * trace(objects, lights, background, Ray{hitPt - refractNormal * bias, refractDir}, depth);
-        }
+    ++depth;
 
 
-        color += curMaterial.color * curMaterial.ka;
-        if (curMaterial.refractive) {
-            color += rCoef * colorReflect + (1 - rCoef) * colorRefract;
+    constexpr Float REFRACTIVE_INDEX_AIR{1.0};
+    Vec3f refractNormal{hitNormal};
+    Float cosIncedent{0}, cosTransmission{0}, sinSqrPhit{0};
+    Float n1{0}, n2{0}, n{0};  // refractive index we come from (n1) and go to (n2)
+    Float rCoef{0};    // reflective/refractive coefficient based on angle
+
+    // fresnel equation
+    if (curMaterial.refractive && depth<=MAX_DEPTH) {
+        cosIncedent = ray.direction.dotProduct(hitNormal);     // is <0 if ray hits outside object hull (ray pointing towards object)
+        if (cosIncedent < 0.0) {
+            // ray from air to object
+            n1 = REFRACTIVE_INDEX_AIR;   // assuming air other medium
+            n2 = curMaterial.refractiveIdx;
+            cosIncedent = -cosIncedent;
         } else {
-            color += colorReflect;
+            // ray from object to air (inside)
+            n1 = curMaterial.refractiveIdx;
+            n2 = REFRACTIVE_INDEX_AIR;   // assuming air other medium
+            refractNormal = -refractNormal;
+        }
+        n = n1/n2;
+        sinSqrPhit = n * n * (1 - cosIncedent * cosIncedent);    // if sinSqrPhit is greater than 1 it is not valid
+        if (sinSqrPhit <= 1) {
+            cosTransmission = sqrt(1-sinSqrPhit);
+            const Float Rorth{(n1*cosIncedent - n2*cosTransmission)/(n1*cosIncedent + n2*cosTransmission)};
+            const Float Rpar{ (n2*cosIncedent - n1*cosTransmission)/(n2*cosIncedent + n1*cosTransmission)};
+            rCoef = (Rorth*Rorth + Rpar*Rpar) / 2;
+        } else {
+            rCoef = 1;
         }
 
-        color.clamp(0, 1);
+    }
+
+    // reflective shading recursive tracing
+    Color colorReflect{0};
+    if (curMaterial.reflective && depth <= MAX_DEPTH) {
+        const Vec3f reflectDir{-hitNormal * 2 * dotProduct(hitNormal,ray.direction) + ray.direction};
+        colorReflect = curMaterial.kr * trace(objects, lights, background, Ray{hitPt + hitNormal * bias, reflectDir}, depth);
+    }
+    // refractive shading recursive tracing
+    Color colorRefract{0};
+    if (curMaterial.refractive && depth <= MAX_DEPTH && sinSqrPhit <= 1) {
+        // if sinSqrPhit > 1.0 we cannot find a transmission vector -> we have 'total internal reflection' (TRI) or critical angle
+            // todo: handle tri and critical angle
+        const Vec3f refractDir{ray.direction * n + refractNormal * (n * cosIncedent - cosTransmission)};
+        colorRefract = curMaterial.kt * trace(objects, lights, background, Ray{hitPt - refractNormal * bias, refractDir}, depth);
+    }
+
+
+    color += curMaterial.color * curMaterial.ka;
+    if (curMaterial.refractive) {
+        color += rCoef * colorReflect + (1 - rCoef) * colorRefract;
+    } else {
+        color += colorReflect;
+    }
+
+    color.clamp(0, 1);
 
 
 
@@ -441,7 +444,6 @@ Color
 //                 << "\tcolorReflect: " << colorReflect << endl
 //                 << "\tcolorRefract: " << colorRefract << endl;
 //        }
-    }
 
     return color;
 }
@@ -594,6 +596,15 @@ create_scene(std::vector<std::shared_ptr<Primitive>>& objects, std::vector<Light
 }
 
 
+template< typename T >
+struct array_deleter
+{
+    void operator ()( T const * p)
+    {
+        delete[] p;
+    }
+};
+
 void thread_render(ImageType* img_ptr, const unsigned int imWidth, const unsigned int imHeight,
                    const std::vector<std::shared_ptr<Primitive>>& objects, const std::vector<Light>& lights,
                    const Camera& camera, const Color& background, unsigned int& finPix)
@@ -615,11 +626,11 @@ void thread_render(ImageType* img_ptr, const unsigned int imWidth, const unsigne
     while (true) {
         {
             std::lock_guard<std::mutex> guard(RENDER_MUTEX);
-            threads.push_back(std::thread{render, img_ptr, x_start, y_start, tileHeight, tileWidth, std::ref(camera),
+            threads.emplace_back(render, img_ptr, x_start, y_start, tileHeight, tileWidth, std::ref(camera),
                                      std::ref(objects),
                                      lights, background,
                                      std::ref(finPix),
-                                     std::ref(thread_count)});
+                                     std::ref(thread_count));
             ++thread_count;
         }
 //        colorize_image_tile(img, ctr++, x_start, y_start, tileWidth, tileHeight);
@@ -673,9 +684,10 @@ main(int argc, char** argv) {
     constexpr unsigned int downScale{1};
     constexpr unsigned int imHeight{600/downScale};
     constexpr unsigned int imWidth{800/downScale};
-    ImageType* img_ptr = new ImageType[imWidth*imHeight*3];
-    memset(img_ptr, 0, sizeof(ImageType)*imWidth*imHeight*3);
-    cv::Mat img{imHeight, imWidth, CV_8UC3, img_ptr};
+
+    std::shared_ptr<ImageType> img_ptr{new ImageType[imWidth*imHeight*3], array_deleter<ImageType>()};
+    memset(img_ptr.get(), 0, sizeof(ImageType)*imWidth*imHeight*3);
+    cv::Mat img{imHeight, imWidth, CV_8UC3, img_ptr.get()};
     cv::namedWindow(winName, CV_WINDOW_AUTOSIZE);
 
 //    constexpr unsigned int H = 250;
@@ -711,7 +723,7 @@ main(int argc, char** argv) {
                         std::ref(background), std::ref(finPix)};
 #else
     unsigned int thread_count = 0;
-    std::thread renderThread{render, img_ptr, 0, 0, imHeight, imWidth, std::ref(camera), std::ref(objects), std::ref(lights),
+    std::thread renderThread{render, img_ptr.get(), 0, 0, imHeight, imWidth, std::ref(camera), std::ref(objects), std::ref(lights),
                         std::ref(background), std::ref(finPix), std::ref(thread_count)};
 #endif
 
@@ -725,5 +737,5 @@ main(int argc, char** argv) {
     cv::waitKey();
     if (renderThread.joinable())
         renderThread.join();
-    delete[] img_ptr;
+//    delete[] img_ptr;
 }
