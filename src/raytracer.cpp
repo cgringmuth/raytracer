@@ -41,7 +41,6 @@
  * - todo: optimization: bounding box with fast intersection calculation around object (bounding box: sphere, box etc.)
  * - todo: optimization: do calculation on GPU
  * - todo: create scene to hold primitives, lights etc.
- * - todo: restructure project
  * - todo: motion blur
  * - todo: global illumination: https://en.wikipedia.org/wiki/Global_illumination
  */
@@ -103,8 +102,8 @@ struct Light {
     Vec3f pos;
     Color color;
 
-    Light(Vec3f pos) : Light{pos, color} {}
-    Light(Vec3f pos, Color color) : pos{pos}, color{color} {}
+    explicit Light(Vec3f pos) : Light{pos, color} {}
+    Light(const Vec3f &pos, const Color& color) : pos{pos}, color{color} {}
 
 };
 
