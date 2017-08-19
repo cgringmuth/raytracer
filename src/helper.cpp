@@ -5,13 +5,11 @@
 #include "helper.h"
 #include <cmath>
 
-namespace raytracer {
-    /** Converts angle in degree into rad.
+/** Converts angle in degree into rad.
  *
  * @param ang angle in degree
  * @return angle in rad
  */
-    Float deg2rad(Float ang) {
-        return ang * M_PI / 180;
-    }
+Float deg2rad(Float ang) {
+    return ang * M_PI / 180;
 }

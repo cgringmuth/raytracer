@@ -11,8 +11,10 @@
 #include <cstring>
 #include <cmath>
 #include <iostream>
+#include <vector>
 
 #include "common.h"
+
 
 struct Mat3d {
     Float v[9];
@@ -259,23 +261,17 @@ operator<<(std::ostream& os, const Vec3<T>& v) {
     return os;
 }
 
-/** Clips the value to min and max.
- * If the input value lies in [min,max], it will not be changed. Otherwise it will be set to min if val < min or to
- * max if val > max.
- * @param min Min value
- * @param max Max value
- * @param val Input value
- * @return The clipped value
- */
-template<typename T>
-T clamp(T min, T max, T val) {
-    val = val < min ? min : val;
-    val = val > max ? max : val;
-    return val;
-}
-
 
 typedef Vec3<Float> Vec3f;
+
+
+template <typename T>
+std::ostream& operator<<(std::ostream& os, std::vector<T> vec) {
+    for (int n=0; n<vec.size()-1; ++n)
+        os << vec[n] << " ";
+    os << vec[vec.size()-1];
+    return os;
+}
 
 
 /** Line which will be used for back raytracing

@@ -7,6 +7,9 @@ add_executable(${PROJECT_NAME}
         src/camera.cpp
         src/camera.h
 
+        src/color.cpp
+        src/color.h
+
         src/common.h
 
         src/container.cpp
@@ -15,9 +18,12 @@ add_executable(${PROJECT_NAME}
         src/helper.cpp
         src/helper.h
 
-        src/raytracer.cpp
+        src/material.h
 
-        )
+        src/primitives.cpp
+        src/primitives.h
+
+        src/raytracer.cpp)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wall -Wextra -Wpedantic -Wshadow -Weffc++ -pedantic" )
 

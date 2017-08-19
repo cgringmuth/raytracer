@@ -1,6 +1,6 @@
 #include <iostream>
 #include <sstream>
-#include <math.h>
+#include <cmath>
 #include <fstream>
 #include <vector>
 #include <memory>
@@ -17,6 +17,8 @@
 
 #include "container.h"
 #include "camera.h"
+#include "color.h"
+#include "primitives.h"
 
 /** Some good resources ray tracing
  * Lecture about ray tracing: http://www.cs.uu.nl/docs/vakken/magr/2015-2016/index.html
@@ -68,8 +70,8 @@
 #define USE_OPENMP              0
 #endif
 
-using namespace std;
-using namespace raytracer;
+//using namespace std;
+//using namespace raytracer;
 
 
 
@@ -90,646 +92,12 @@ private:
 };
 
 bool processing{true};
-const string winName{"image"};
+const std::string winName{"image"};
 typedef unsigned char ImageType;
 Timer timer;
-constexpr Float EPS{0.000001};
 constexpr int MAX_DEPTH{10};
-mutex RENDER_MUTEX;
+std::mutex RENDER_MUTEX;
 
-/** Container to save pixel color information in rgb format.
- *
- */
-struct Color {
-
-    Float r, g, b;
-
-    Color() : Color{0} {};
-    explicit Color(const Float v) : Color{v,v,v} {};
-    Color(const Color& color) : Color{color.r, color.g, color.b} {};
-    Color(Float r, Float g, Float b) : r{r}, g{g}, b{b} {};
-
-    Color& operator/=(Float d) {
-        const Float invD{1/d};
-        return *this*=invD;
-    }
-
-    Color& operator*=(Float d) {
-        r *= d;
-        g *= d;
-        b *= d;
-        return *this;
-    }
-
-    Color& operator*=(Color c) {
-        r *= c.r;
-        g *= c.g;
-        b *= c.b;
-        return *this;
-    }
-
-    Color& operator+=(const Color& rhs) {
-        r += rhs.r;
-        g += rhs.g;
-        b += rhs.b;
-        return *this;
-    }
-
-    Color& clamp(Float min, Float max) {
-        r = ::clamp(min, max, r);
-        g = ::clamp(min, max, g);
-        b = ::clamp(min, max, b);
-        return *this;
-    }
-
-    Color& round() {
-        r = ::round(r);
-        g = ::round(g);
-        b = ::round(b);
-        return *this;
-    }
-
-    static Color white() {
-        return Color(1, 1, 1);
-    }
-
-    static Color black() {
-        return Color();
-    }
-
-    static Color red() {
-        return Color(1, 0, 0);
-    }
-
-    static Color green() {
-        return Color(0, 1, 0);
-    }
-
-    static Color blue() {
-        return Color(0, 0, 1);
-    }
-
-    static Color gray() {
-        return Color(0.5);
-    }
-
-    static Color light_gray() {
-        return Color(0.75);
-    }
-
-    static Color yellow() {
-        return Color(1,1,0);
-    }
-
-    static Color glass() {
-        return Color(0.788, 0.858, 0.862);
-    }
-
-};
-
-Color operator/(Color lhs, const Float d) {
-    return lhs /= d;
-}
-
-Color operator+(Color lhs, const Color& rhs) {
-    return lhs += rhs;
-}
-
-Color operator*(Color lhs, const Float d) {
-    return lhs *= d;
-}
-
-Color operator*(const Float d, Color rhs) {
-    return rhs *= d;
-}
-
-Color operator*(Color lhs, const Color& rhs) {
-    return lhs *= rhs;
-}
-
-
-struct Material {
-    Color color;
-    Float ka;  // ambient reflectance
-    Float kd;  // diffuse reflectance
-
-    Float ks;  // specular reflectance
-    Float specRefExp; // specular-reflection exponent
-
-    bool reflective;
-    Float kr;  // reflectance coefficient
-
-    bool refractive;
-    /** The refraction coefficient. This is the coefficient for this material
-     * src: https://graphics.stanford.edu/courses/cs148-10-summer/docs/2006--degreve--reflection_refraction.pdf
-     *
-     * Snell's law: n1*sin(phi1) = n2*sin(phi2)
-     *
-     * NOTE: It is allways assumed that ray go from medium (n1) to medium (n2).
-     *
-     * sin(phi1)   n1
-     * --------- = -- = n12
-     * sin(phi2)   n2
-     *
-     * Assuming air has n=1.0
-     */
-    Float refractiveIdx;
-    Float kt;  // transmission coefficient (the amount of light which it can pass through object)
-
-    Material(const Color& color, Float ka=0.2, Float kd=0.7, Float ks=0.2, Float kr=0, Float kt=0, Float specRefExp=8,
-             Float refractiveIdx=0, bool reflective=false, bool refractive=false)
-            : color(color), ka(ka), kd(kd), ks(ks), specRefExp(specRefExp), kr(kr), refractiveIdx(refractiveIdx)
-            , reflective(reflective), refractive(refractive), kt{kt} {}
-    Material(Float ka=0.2, Float kd=0.7, Float ks=0.2, Float kr=0, Float kt=0, Float specRefExp=8, Float refractiveIdx=0,
-             bool reflective=false, bool refractive=false)
-            : color{}, ka(ka), kd(kd), ks(ks), specRefExp(specRefExp), kr(kr), refractiveIdx(refractiveIdx),
-              reflective(reflective), refractive(refractive), kt{kt} {}
-};
-
-
-/** Generic base class for all objects which shall be rendered
- *
- */
-struct Primitive {
-    Material material;
-
-    Primitive(const Color& color) : material(color) {}
-    Primitive(const Material& material) : material(material) {}
-    Primitive() : material{} {}
-
-    virtual bool intersect(const Ray& ray, Float& dist, Vec3f& normal) const = 0;
-
-    virtual Vec3f getNormal(const Vec3f& vec) const = 0;
-
-};
-
-
-struct Plane : public Primitive {
-    Float a, b, c, d;  // implicit description: ax + by + cz + d = 0
-
-    Plane(Float a, Float b, Float c, Float d, const Color& color)
-            : a(a), b(b), c(c), d(d), Primitive(color) {
-        // normalize normal vector
-        Vec3f pn{a, b, c};
-        pn.normalize();
-        this->a = pn[0];
-        this->b = pn[1];
-        this->c = pn[2];
-    }
-
-    Plane(Float a, Float b, Float c, Float d, const Material& material)
-            : a(a), b(b), c(c), d(d), Primitive(material) {
-        // normalize normal vector
-        Vec3f pn{a, b, c};
-        pn.normalize();
-        this->a = pn[0];
-        this->b = pn[1];
-        this->c = pn[2];
-    }
-
-    Plane(Vec3f normal, Float dist, const Color& color) : d{dist}, Primitive{color} {
-        normal.normalize(); // make sure normal is normalized
-        a = normal[0];
-        b = normal[1];
-        c = normal[2];
-    }
-
-    bool intersect(const Ray& ray, Float& dist, Vec3f& normal) const override {
-        //src: https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/ray-triangle-intersection-geometric-solution
-        normal = Vec3f{a, b, c};
-        const Float vd{normal.dotProduct(ray.direction)};
-
-        if (abs(vd) < EPS)  // check if vd is 0 -> plane and ray parallel
-            false;
-        if (vd > 0)     // normal of plane is pointing away from camera (maybe handle differently)
-            false;
-
-        const Float vo{normal.dotProduct(ray.origin) + d};
-        dist = -vo / vd;
-
-        return dist > EPS;
-    }
-
-    Vec3f getNormal(const Vec3f& vec) const override {
-        return Vec3f{a, b, c};
-    }
-};
-
-struct Triangle : public Primitive {
-    Vec3f v0, v1, v2, n0, n1, n2;
-
-    Triangle(const Vec3f& v0, const Vec3f& v1, const Vec3f& v2, const Color& color)
-            : v0{v0}, v1{v1}, v2{v2}, Primitive{color}, n0{calcNormal()}, n1{calcNormal()}, n2{calcNormal()} { }
-    Triangle(const Vec3f& v0, const Vec3f& v1, const Vec3f& v2, const Material material=Material{})
-            : v0{v0}, v1{v1}, v2{v2}, Primitive{material}, n0{calcNormal()}, n1{calcNormal()}, n2{calcNormal()} { }
-    Triangle(const Vec3f& v0, const Vec3f& v1, const Vec3f& v2,
-             const Vec3f& n0, const Vec3f& n1, const Vec3f& n2,
-             const Material material=Material{})
-            : v0{v0}, v1{v1}, v2{v2}, Primitive{material}, n0{n0}, n1{n1}, n2{n2} { }
-
-    virtual bool intersect(const Ray& ray, Float& dist, Vec3f& normal) const override {
-        normal = this->n1;
-#if MT_TRIANGLE_INTERSECT==1
-        // src: http://www.cs.virginia.edu/%7Egfx/Courses/2003/ImageSynthesis/papers/Acceleration/Fast%20MinimumStorage%20RayTriangle%20Intersection.pdf
-        // Any point on the triangle can be described by (in the uv-space)
-        // P = v0 + u(v1-v0) + v(v2-v0)
-        // P can also be described by ray equation (when hit triangle)
-        // P = o + td
-        // Note: u and v can be used for texture mapping and normal interpolation
-        const Vec3f v0v1{v1-v0};    // edge 1 from v0 to v1
-        const Vec3f v0v2{v2-v0};    // edge 2 from v0 to v2
-        const Vec3f pVec{ray.direction.cross_product(v0v2)};
-        const Float det{pVec.dotProduct(v0v1)};
-
-        // if determinant is negative, triangle is backfacing
-        // if determinant is close to 0, ray is missing triangle
-#if CULLING == 1
-        if (det < EPS)
-            return false;
-#else
-        if (abs(det) < EPS)
-            return false;
-#endif
-        const Float invDet = 1 / det;
-
-        // calc u
-        const Vec3f tVec{ray.origin-v0};
-        const Float u{invDet * pVec.dotProduct(tVec)};
-        if (u < 0 || u > 1)
-            return false;
-
-        // calc v
-        const Vec3f qVec{tVec.cross_product(v0v1)};
-        const Float v{invDet * qVec.dotProduct(ray.direction)};
-        if (v < 0 || u+v > 1)
-            return false;
-
-        // calc dist
-        dist = invDet * qVec.dotProduct(v0v2);
-
-        normal = (1-u-v)*n0 + u*n1 + v*n2;  // interpolate normal based on intersection point
-//        normal.normalize();
-#else
-//        cout << normal << endl;
-//        cout << "v0: " << v0 << "v1: " << v1 << "v2: " << v2 << endl;
-        Plane plane{normal,
-                    -normal.dotProduct(v1),  // todo: check if this is correct (seems more as an workaround)
-                    Color::white()};
-//        cout << ray.direction << endl;
-
-        if (!plane.intersect(ray, dist, normal)) {
-            return false;
-        }
-
-        const Vec3f hit{ray.getPoint(dist)}; // get point on plane
-
-//        cout << "hit: " << hit << " hit length:" << hit.length() << endl;
-
-        // do the "inside-outside" test
-        // check if intersection point is on left side of each edge
-
-        const Vec3f edge0{v1 - v0};
-        const Vec3f vp0{hit - v0};
-//        cout << "edge0: " << edge0 << " vp0: " << vp0 << endl;
-        if (dotProduct(cross_product(edge0, vp0), normal) < 0) {
-            return false;
-        }
-
-        const Vec3f edge1{v2 - v1};
-        const Vec3f vp1{hit - v1};
-//        cout << "edge1: " << edge1 << " vp1: " << vp1 << endl;
-        if (dotProduct(cross_product(edge1, vp1), normal) < 0) {
-            return false;
-        }
-
-        const Vec3f edge2{v0 - v2};
-        const Vec3f vp2{hit - v2};
-//        cout << "edge2: " << edge2 << " vp2: " << vp2 << endl;
-        if (dotProduct(cross_product(edge2, vp2), normal) < 0) {
-            return false;
-        }
-
-//        cout << "dist: " << eps << endl;
-
-#endif
-        return dist > EPS;
-    }
-
-    virtual Vec3f getNormal(const Vec3f& vec) const override {
-        return n0;  // todo: does not make sense anymore
-    }
-
-    Vec3f calcNormal() {
-        // todo: with one normal for each vertex this is not correct anymore
-        const Vec3f edge0{v1 - v0};
-        const Vec3f edge1{v2 - v0};
-        n0 = cross_product(edge0, edge1);
-        n0.normalize();
-        return n0;
-    }
-
-    void scale(Float s) {
-        v0 *= s;
-        v1 *= s;
-        v2 *= s;
-    }
-
-    Triangle& operator+=(const Float t) {
-        v0 += t;
-        v1 += t;
-        v2 += t;
-        return *this;
-    }
-
-    Triangle& operator+=(const Vec3f& v) {
-        v0 += v;
-        v1 += v;
-        v2 += v;
-        return *this;
-    }
-
-    Triangle& operator*=(const Mat3d& mat) {
-        v0 *= mat;
-        v1 *= mat;
-        v2 *= mat;
-        n0 *= mat;
-        n1 *= mat;
-        n2 *= mat;
-        return *this;
-    }
-};
-
-Triangle operator+(Triangle lhs, const Float t) {
-    return lhs += t;
-}
-
-Triangle operator+(Triangle lhs, const Vec3f& v) {
-    return lhs += v;
-}
-
-
-template <typename T>
-ostream& operator<<(ostream& os, vector<T> vec) {
-    for (int n=0; n<vec.size()-1; ++n)
-        os << vec[n] << " ";
-    os << vec[vec.size()-1];
-    return os;
-}
-
-/** The most common object to be rendered in a raytracer
- *
- */
-struct Sphere : public Primitive {
-    // define location + radius
-    Vec3f center;
-    Float radius;
-
-    Sphere(const Vec3f& c, Float r, const Color& color) : center{c}, radius{r}, Primitive{color} {}
-    Sphere(const Vec3f& c, Float r, const Material& material) : center{c}, radius{r}, Primitive{material} {}
-    Sphere() {}
-
-    // get intersection with ray: refer: https://en.wikipedia.org/wiki/Line%E2%80%93sphere_intersection
-    // more details: https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rendering-simple-shapes/ray-sphere-intersection
-    virtual bool
-    intersect(const Ray& ray, Float& dist, Vec3f& normal) const override {
-        // (l * (o - c))^2 - || o - c ||^2 + r^2
-        const Vec3f temp{ray.origin - center};
-        const Float val1 = temp.dotProduct(ray.direction);
-        const Float val2 = temp.length();
-        const Float val3 = val1 * val1 - val2 * val2 + radius * radius;
-
-        if (val3 < 0) {
-            return false;
-        }
-
-        // compute distance
-        const Float dist1 = -val1 + sqrt(val3);
-        const Float dist2 = -val1 - sqrt(val3);
-
-        if (dist1 < 0 || dist2 < 0) {
-            dist = max(dist1, dist2);
-        } else if (dist1 > 0 && dist2 > 0) {
-            dist = min(dist1, dist2);
-        }
-        normal = getNormal(ray.getPoint(dist));
-
-        return dist > EPS;      //  neg. dist are behind ray; eps is for not hitting itself
-    }
-
-    virtual Vec3f
-    getNormal(const Vec3f& P) const override {
-        // src: https://cs.colorado.edu/~mcbryan/5229.03/mail/110.htm
-        Vec3f n{P - center};
-        n /= radius;
-        return n;
-    }
-};
-
-struct Model : Primitive {
-    vector<Triangle> faces;
-
-    /** Bounding box volume used for optimization. */
-    Sphere bbvol;
-
-    Model(const Color& color, const vector<Triangle>& faces) : Primitive(color), faces(faces) { updateBBVol(); }
-    Model(const Material& material, const vector<Triangle>& faces) : Primitive(material), faces(faces) { updateBBVol(); }
-    Model(const Color& color) : Primitive(color) {}
-    Model(const Material& material) : Primitive(material) {}
-    Model() {}
-
-    void
-    updateBBVol() {
-        Vec3f center{0,0,0};
-        Float radius{0}, tmp{0};
-        const unsigned int numVertices{faces.size()*3};
-        for (const auto& f : faces) {
-            const Vec3f v0{f.v0};
-            const Vec3f v1{f.v1};
-            const Vec3f v2{f.v2};
-            center += v0;
-            center += v1;
-            center += v2;
-        }
-        center /= numVertices;
-        for (const auto& f : faces) {
-            const Vec3f v0{f.v0};
-            const Vec3f v1{f.v1};
-            const Vec3f v2{f.v2};
-            tmp = (center - v0).length();
-            if (tmp > radius) {
-                radius = tmp;
-            }
-            tmp = (center - v1).length();
-            if (tmp > radius) {
-                radius = tmp;
-            }
-            tmp = (center - v2).length();
-            if (tmp > radius) {
-                radius = tmp;
-            }
-        }
-        bbvol = Sphere{center, radius, Color{0}};
-    }
-
-    static shared_ptr<Model> load_ply(const string& fname, const Material& material, bool calcNormal=false) {
-        cout << "... loading model: " << fname << endl;
-
-        ifstream ifs{fname};
-        if (!ifs.is_open())
-            throw runtime_error{"Model "+fname+" could not be loaded. File does not exists."};
-
-        string line, key;
-        unsigned int val;
-        getline(ifs, line);
-        bool ply_type{false};
-
-        unsigned int nfaces, nvertices;
-
-        while (true) {
-            stringstream ss{line};
-            ss >> key;
-            if (key == "ply") {
-                ply_type = true;
-            } else if (key == "comment") {
-                // ignore for now
-            } else if (key == "end_header") {
-                break;
-            } else if (key == "element") {
-                ss >> key >> val;
-                if (key == "vertex") {
-                    nvertices = val;
-                } else if (key == "face") {
-                    nfaces = val;
-                }
-            }
-            // ignore all other keys for now
-            getline(ifs, line);
-        }
-
-        // assume coordinates x, y, z come first and ignore all other following values
-        vector<Vec3f> vertices, normals;
-        vector<vector<unsigned int>> face_idx;
-        vector<Triangle> faces;
-
-        // read vertices
-        for (int i = 0; i < nvertices; ++i) {
-            getline(ifs, line);
-            stringstream ss{line};
-            Float x, y, z;
-            ss >> x >> y >> z;
-            vertices.emplace_back(Vec3f{x, y, z});
-        }
-
-        // read faces indices
-        for (int i = 0; i < nfaces; ++i) {
-            getline(ifs, line);
-            stringstream ss{line};
-            unsigned int num, iv0, iv1, iv2;
-            ss >> num >> iv0 >> iv1 >> iv2;
-            if (num != 3) {
-                throw runtime_error{"Only triangles are supported"};
-            }
-            face_idx.emplace_back(vector<unsigned int>{iv0, iv1, iv2});
-        }
-
-
-        if (calcNormal) {
-            // interpolate normals between all vertices
-            normals.resize(vertices.size());
-            for (const auto& fidx : face_idx) {
-                const Vec3f v0{vertices[fidx[0]]};
-                const Vec3f v1{vertices[fidx[1]]};
-                const Vec3f v2{vertices[fidx[2]]};
-                normals[fidx[0]] += cross_product(v1-v0, v2-v0);
-                normals[fidx[1]] += cross_product(v2-v1, v0-v1);
-                normals[fidx[2]] += cross_product(v0-v2, v1-v2);
-            }
-            // normalize all normals
-            for (auto& normal : normals) {
-                normal.normalize();
-            }
-        }
-
-        // create faces
-        for (const auto& fixd : face_idx) {
-            const unsigned int iv0{fixd[0]};
-            const unsigned int iv1{fixd[1]};
-            const unsigned int iv2{fixd[2]};
-
-            if (calcNormal) {
-                faces.emplace_back(Triangle{vertices[iv0], vertices[iv1], vertices[iv2],
-                                 normals[iv0], normals[iv1], normals[iv2], material});
-            } else {
-                faces.emplace_back(Triangle{vertices[iv0], vertices[iv1], vertices[iv2], material});
-            }
-        }
-
-        return make_shared<Model>(material, faces);
-    }
-
-    bool intersect(const Ray& ray, Float& dist, Vec3f& normal) const override {
-        // todo: through all faces and give closest distance which is not negative and return normal also (for all)
-        Float tmpdist;
-        Vec3f tmpnormal;
-        dist = std::numeric_limits<Float>::max();
-        bool hit{false};
-        if (!bbvol.intersect(ray, tmpdist, tmpnormal)) {
-            return false;
-        }
-//        hit = true;
-//        normal = tmpnormal;
-//        dist = tmpdist;
-        for (const auto& f : faces) {
-            if (f.intersect(ray, tmpdist, tmpnormal) && tmpdist < dist) {
-                dist = tmpdist;
-                normal = tmpnormal;
-                hit = true;
-            }
-        }
-        return hit && dist > EPS;
-    }
-
-    Model& scale(Float s) {
-        for (auto& f : faces) {
-            f.scale(s);
-        }
-//        bbvol.radius *= s;
-        updateBBVol();
-        return *this;
-    }
-
-    Model& translate(const Vec3f& t) {
-        return *this += t;
-    }
-
-    Vec3f getNormal(const Vec3f& vec) const override {
-        return Vec3f{};     // fixme: currently broken
-    }
-
-    Model& operator*=(const Mat3d& mat) {
-        for (auto& f : faces) {
-            f *= mat;
-        }
-        return *this;
-    }
-
-    Model& operator+=(const Vec3f& rhs) {
-        for (auto& f : faces) {
-            f += rhs;
-        }
-        bbvol.center += rhs;
-        return *this;
-    }
-
-};
-
-Model operator+(Model lhs, const Vec3f& rhs) {
-    return lhs += rhs;
-}
-
-Model operator*(Model lhs, const Mat3d& rhs) {
-    return lhs *= rhs;
-}
 
 struct Light {
     Vec3f pos;
@@ -740,40 +108,33 @@ struct Light {
 
 };
 
-ostream&
-operator<<(ostream& os, const Color& c) {
-    os << c.r << " " << c.g << " " << c.b << " ";
-    return os;
-}
-
-
 void check_op_overloading() {
     Vec3f v1, v2{1, 2, 3};
 
     v1 += v2;
-    cout << v1 << " == 1 2 3\n";
-    cout << v1 * 2 << " == 2 4 6\n";
-//    cout << v1+2 << " == 3 4 5\n";
+    std::cout << v1 << " == 1 2 3\n";
+    std::cout << v1 * 2 << " == 2 4 6\n";
+//    std::cout << v1+2 << " == 3 4 5\n";
 
     Color c1, c2{1, 2, 3};
     c1 += c2;
-    cout << c1 << " == 1 2 3\n";
-    cout << c1 * c2 << " == 1 4 9\n";
-    cout << c1 * 2 << " == 2 4 6\n";
+    std::cout << c1 << " == 1 2 3\n";
+    std::cout << c1 * c2 << " == 1 4 9\n";
+    std::cout << c1 * 2 << " == 2 4 6\n";
 
     const Vec3f e1{Vec3f{1, 0, 0}};
     const Vec3f e2{Vec3f{0, 1, 0}};
     const Vec3f e3{Vec3f{0, 0, 1}};
     const Vec3f cp{cross_product(e1, e2)};
-    cout << "cross product: " << cp << " == 0 0 1\n";
-    cout << "cross product angle should be 90 deg => 1): " << cos(cp.dotProduct(e1)) << " == 1 \n";
+    std::cout << "cross product: " << cp << " == 0 0 1\n";
+    std::cout << "cross product angle should be 90 deg => 1): " << cos(cp.dotProduct(e1)) << " == 1 \n";
 
 
 }
 
 
 void
-create_box(vector<shared_ptr<Primitive>>& objects) {
+create_box(std::vector<std::shared_ptr<Primitive>>& objects) {
 //    const int y_offset{-3};
 //    const int x_offset{2};
 //    const int z_offset{-9};
@@ -815,7 +176,7 @@ create_box(vector<shared_ptr<Primitive>>& objects) {
     mat.ka = 0.2;
     mat.kd = 0.5;
     mat.kr = 0.1;
-    vector<Triangle> triangles;
+    std::vector<Triangle> triangles;
 
 
     // front
@@ -866,7 +227,7 @@ create_box(vector<shared_ptr<Primitive>>& objects) {
     triangles.emplace_back(Triangle{v4, v1, v7, mat});
 //    objects.push_back(make_shared<Triangle>( v7, v1, v2, color));
 //    objects.push_back(make_shared<Triangle>( v7, v1, v2, color));
-    shared_ptr<Model> model{make_shared<Model>(mat, triangles)};
+    std::shared_ptr<Model> model{std::make_shared<Model>(mat, triangles)};
     objects.push_back(model);
 }
 
@@ -893,8 +254,8 @@ preview(cv::Mat& img, unsigned int& finPix, unsigned int sumPix, int delay = 100
         const Float pixPerSec{((Float)(curFinPix - lastFinPix))/(curElapsed - lastElapsed)};
         lastFinPix = curFinPix;
         lastElapsed = curElapsed;
-        const string text{to_string((unsigned int)progress) + "%; t: " + to_string((unsigned int)curElapsed)
-                          + " s; " + to_string((unsigned int) pixPerSec) + " pix/s"};
+        const std::string text{std::to_string((unsigned int)progress) + "%; t: " + std::to_string((unsigned int)curElapsed)
+                          + " s; " + std::to_string((unsigned int) pixPerSec) + " pix/s"};
         const int fontFace{CV_FONT_HERSHEY_SIMPLEX};
         const Float fontScale{0.8};
         const cv::Scalar color{0,255,0};
@@ -907,7 +268,7 @@ preview(cv::Mat& img, unsigned int& finPix, unsigned int sumPix, int delay = 100
         const Float alpha{0.2};
 
         if (!((unsigned int)progress % progressInterval) && !printedProgress){
-            cout << "... " << text << endl;
+            std::cout << "... " << text << std::endl;
             printedProgress = true;
         }
 
@@ -924,14 +285,14 @@ preview(cv::Mat& img, unsigned int& finPix, unsigned int sumPix, int delay = 100
         cv::imshow(winName, tmpimg);
         key = cv::waitKey(delay);
         if ((key & 0xff) == 27) {
-            cout << "... rendering canceled" << endl;
+            std::cout << "... rendering canceled" << std::endl;
             exit(0);
         }
     }
 }
 
 
-Float calcDist(const vector<shared_ptr<Primitive>>& objects,
+Float calcDist(const std::vector<std::shared_ptr<Primitive>>& objects,
                 const Ray& ray,
                 Vec3f& hitNormal
 ) {
@@ -949,8 +310,8 @@ Float calcDist(const vector<shared_ptr<Primitive>>& objects,
 }
 
 Color
- trace(const vector<shared_ptr<Primitive>>& objects,
-      const vector<Light>& lights,
+ trace(const std::vector<std::shared_ptr<Primitive>>& objects,
+      const std::vector<Light>& lights,
       const Color& background,
       const Ray& ray,
       int depth) {
@@ -999,13 +360,13 @@ Color
 
             // diffuse shading
             const Float cosPhi{
-                    max<Float>(hitNormal.dotProduct(lv), 0.0)};    // todo: check why we have to clip negative values
+                    std::max<Float>(hitNormal.dotProduct(lv), 0.0)};    // todo: check why we have to clip negative values
             color += curMaterial.color * l.color * curMaterial.kd * (cosPhi / (ldist * ldist));    // todo: change color to diffuse color
 
             // specular shading
             const Vec3f reflectRay{hitNormal * 2 * dotProduct(hitNormal,lv) - lv};
             const Float cosAlpha{
-                    max<Float>(reflectRay.dotProduct(lv), 0.0)};    // todo: check why we have to clip negative values
+                    std::max<Float>(reflectRay.dotProduct(lv), 0.0)};    // todo: check why we have to clip negative values
             color += l.color * curMaterial.ks * (pow(cosAlpha, curMaterial.specRefExp) / (ldist * ldist));     // todo: add reflective color here
 //            color.clamp(0, 1);
         }
@@ -1075,7 +436,7 @@ Color
 
 //        if (depth == MAX_DEPTH)
 //        {
-//            cout << "max depth reached: color: " << color << " factor r: " << rCoef << endl
+//            std::cout << "max depth reached: color: " << color << " factor r: " << rCoef << endl
 //                 << "\tcurMaterial.reflective: " << (curMaterial.reflective ? "true" : "false") << endl
 //                 << "\tcurMaterial.refractive: " << (curMaterial.refractive ? "true" : "false") << endl
 //                 << "\tcolorReflect: " << colorReflect << endl
@@ -1088,8 +449,8 @@ Color
 
 void
 render(ImageType* img, const unsigned int x_start, const unsigned int y_start, const unsigned int cH,
-       const unsigned int cW, const Camera& camera, const vector<shared_ptr<Primitive>>& objects,
-       const vector<Light>& lights, const Color& background, unsigned int& finPix,
+       const unsigned int cW, const Camera& camera, const std::vector<std::shared_ptr<Primitive>>& objects,
+       const std::vector<Light>& lights, const Color& background, unsigned int& finPix,
        unsigned int& thread_count // only required when used in threads
 ) {
     const unsigned int W{camera.getImWidth()};
@@ -1102,7 +463,7 @@ render(ImageType* img, const unsigned int x_start, const unsigned int y_start, c
         ImageType* img_ptr{img + 3 * (y*W + x_start)};
         for (unsigned int x = x_start; x < cW+x_start; ++x) {
 //            const Ray ray{camera.castRay(x, y)};
-            const vector<Ray> rays{camera.castRays(x,y)};
+            const std::vector<Ray> rays{camera.castRays(x,y)};
             const size_t numRays{rays.size()};
             Color px_color{0};
 
@@ -1138,7 +499,7 @@ colorize_image_tile(cv::Mat img, int num, int x_start, int y_start, int pW, int 
     const int fontFace = CV_FONT_HERSHEY_SIMPLEX;
     const Float fontScale = 1;
     const int thickness = 2;
-    const string text{"thread "+to_string(num)};
+    const std::string text{"thread "+std::to_string(num)};
     const cv::Scalar bgColors[] = {cv::Scalar{0, 0, 255},
                                    cv::Scalar{0, 255, 0},
                                    cv::Scalar{255, 0, 0},
@@ -1161,7 +522,7 @@ colorize_image_tile(cv::Mat img, int num, int x_start, int y_start, int pW, int 
 
 
 void
-create_scene(vector<shared_ptr<Primitive>>& objects, vector<Light>& lights) {
+create_scene(std::vector<std::shared_ptr<Primitive>>& objects, std::vector<Light>& lights) {
     lights.emplace_back(Light{Vec3f{0, 3, -7.5}, Color::white() * 3});
 //    lights.emplace_back(Light{Vec3f{0, 8, -9}, Color::white()*0.5});
     lights.emplace_back(Light{Vec3f{0, 0, -1}, Color::white() * 10});
@@ -1174,17 +535,18 @@ create_scene(vector<shared_ptr<Primitive>>& objects, vector<Light>& lights) {
     const Material m1(Color::light_gray(), 0.1, 0.7, 0.4, 0.3, 0, 8, 0, true);
     const Material m2(Color::white(), 0.1, 0.7, 0.4);
 
-    objects.push_back(make_shared<Sphere>(Vec3f{0, 0, -8}, 1, Material(Color::red(), 0, 0, 0, 1, 1, 8, 0, true)));
-    objects.push_back(make_shared<Sphere>(Vec3f{2, 0.25, -8}, 0.75, Material{Color{1, 1, 0}, 0.2, 0.7, 0}));
+    objects.push_back(std::make_shared<Sphere>(Vec3f{0, 0, -8}, 1, Material(Color::red(), 0, 0, 0, 1, 1, 8, 0, true)));
+    objects.push_back(std::make_shared<Sphere>(Vec3f{2, 0.25, -8}, 0.75, Material{Color{1, 1, 0}, 0.2, 0.7, 0}));
 //    objects.push_back(make_shared<Sphere>(Vec3f{0, 1, -3}, 0.5, glass));
-    objects.push_back(make_shared<Sphere>(Vec3f{-2.5, 2, -5}, 1, Material{Color{1, 0, 1}, 0.2, 0.5, 0.7}));
+    objects.push_back(std::make_shared<Sphere>(Vec3f{-2.5, 2, -5}, 1, Material{Color{1, 0, 1}, 0.2, 0.5, 0.7}));
 
 //    create_box(objects);
-    const string mesh_root{"/home/chris/shared/github/chris/raytracer/data/3d_meshes/"};
-    string bunny_res4_path{mesh_root + "bunny/reconstruction/bun_zipper_res4.ply"};
-    string bunny_res2_path{mesh_root + "bunny/reconstruction/bun_zipper_res2.ply"};
-    string bunny_path{mesh_root + "bunny/reconstruction/bun_zipper.ply"};
-    shared_ptr<Model> bunny{Model::load_ply(bunny_path, porcelain, true)};     // glass bunny
+//    const string mesh_root{"/home/chris/shared/github/chris/raytracer/data/3d_meshes/"};
+    const std::string mesh_root{"/home/chris/test/raytracer/data/3d_meshes/"};
+    std::string bunny_res4_path{mesh_root + "bunny/reconstruction/bun_zipper_res4.ply"};
+    std::string bunny_res2_path{mesh_root + "bunny/reconstruction/bun_zipper_res2.ply"};
+    std::string bunny_path{mesh_root + "bunny/reconstruction/bun_zipper.ply"};
+    std::shared_ptr<Model> bunny{Model::load_ply(bunny_path, porcelain, true)};     // glass bunny
 //    shared_ptr<Model> bunny{Model::load_ply(bunny_path, Material(Color::white(), 0.2, 0.5, 0.8, 0.2))};
 //    *bunny *= Mat3d::rotation(M_PI / 8, M_PI / 6, 0);
 //    *bunny *= Mat3d::rotationX(M_PI/6);
@@ -1216,25 +578,25 @@ create_scene(vector<shared_ptr<Primitive>>& objects, vector<Light>& lights) {
     const int box_len{4};
     // back
     const Color wall_color{192.0 / 255, 155.0 / 255, 94.0 / 255};
-    objects.push_back(make_shared<Plane>(0, 0, 1, box_len + 8, wall_color));
+    objects.push_back(std::make_shared<Plane>(0, 0, 1, box_len + 8, wall_color));
     // left
-    objects.push_back(make_shared<Plane>(1, 0, 0, box_len, Color::red()));
+    objects.push_back(std::make_shared<Plane>(1, 0, 0, box_len, Color::red()));
     // right
-//    objects.push_back(make_shared<Plane>(-1, 0, 0, box_len, Material{Color::green(), 0,0,0,1,0,8, 0, true}));   // mirror
-    objects.push_back(make_shared<Plane>(-1, 0, 0, box_len, Color::green()));
+//    objects.push_back(std::make_shared<Plane>(-1, 0, 0, box_len, Material{Color::green(), 0,0,0,1,0,8, 0, true}));   // mirror
+    objects.push_back(std::make_shared<Plane>(-1, 0, 0, box_len, Color::green()));
     // bottom
-    objects.push_back(make_shared<Plane>(0, 1, 0, box_len, Color::blue()));
+    objects.push_back(std::make_shared<Plane>(0, 1, 0, box_len, Color::blue()));
     // top
-    objects.push_back(make_shared<Plane>(0, -1, 0, box_len, wall_color));
+    objects.push_back(std::make_shared<Plane>(0, -1, 0, box_len, wall_color));
     // behind camera
-    objects.push_back(make_shared<Plane>(0, 0, -1, box_len, Color(1, 1, 0)));
+    objects.push_back(std::make_shared<Plane>(0, 0, -1, box_len, Color(1, 1, 0)));
 
 //    s.radius = 10;
 }
 
 
 void thread_render(ImageType* img_ptr, const unsigned int imWidth, const unsigned int imHeight,
-                   const vector<shared_ptr<Primitive>>& objects, const vector<Light>& lights,
+                   const std::vector<std::shared_ptr<Primitive>>& objects, const std::vector<Light>& lights,
                    const Camera& camera, const Color& background, unsigned int& finPix)
 {
 
@@ -1244,17 +606,17 @@ void thread_render(ImageType* img_ptr, const unsigned int imWidth, const unsigne
     const unsigned int tileWidth{imWidth/nXTiles};
     const unsigned int tileHeight{imHeight/nYTiles};
 
-    const unsigned int max_threads{thread::hardware_concurrency()};   // max: num available threads
-    cout << "... starting " << max_threads << " threads" << endl;
-    vector<thread> threads;
+    const unsigned int max_threads{std::thread::hardware_concurrency()};   // max: num available threads
+    std::cout << "... starting " << max_threads << " threads" << std::endl;
+    std::vector<std::thread> threads;
     unsigned int x_start{0};
     unsigned int y_start{0};
     unsigned int ctr{0};
     unsigned int thread_count{0};
     while (true) {
         {
-            lock_guard<mutex> guard(RENDER_MUTEX);
-            threads.push_back(thread{render, img_ptr, x_start, y_start, tileHeight, tileWidth, std::ref(camera),
+            std::lock_guard<std::mutex> guard(RENDER_MUTEX);
+            threads.push_back(std::thread{render, img_ptr, x_start, y_start, tileHeight, tileWidth, std::ref(camera),
                                      std::ref(objects),
                                      lights, background,
                                      std::ref(finPix),
@@ -1271,12 +633,12 @@ void thread_render(ImageType* img_ptr, const unsigned int imWidth, const unsigne
         }
         // wait until new threads can be started
         while (thread_count >= max_threads) {
-            this_thread::sleep_for(chrono::milliseconds(100));
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
     }
 
     // wait for other threads to finish
-    cout << "... waiting for threads to finish " << endl;
+    std::cout << "... waiting for threads to finish " << std::endl;
     for (auto& t : threads) {
         if (t.joinable())
             t.join();
@@ -1287,24 +649,24 @@ void thread_render(ImageType* img_ptr, const unsigned int imWidth, const unsigne
 
 int
 main(int argc, char** argv) {
-    string outFilename{"raytracer.png"};
+    std::string outFilename{"raytracer.png"};
     if(argc > 1)
     {
-        if (string(argv[1]) == "-o") {
+        if (std::string(argv[1]) == "-o") {
             outFilename = argv[2];
         }
     }
 
-    cout << "... start ray tracer" << endl;
+    std::cout << "... start ray tracer" << std::endl;
 #if MT_TRIANGLE_INTERSECT == 1
-    cout << "... using Moeller-Trumbore algorithm for triangle intersection calculation" << endl;
+    std::cout << "... using Moeller-Trumbore algorithm for triangle intersection calculation" << std::endl;
 #endif
-    cout << "... write to file: " << outFilename << endl;
+    std::cout << "... write to file: " << outFilename << std::endl;
 
 #if USE_OPENMP == 1
-    cout << "... using OpenMP for parallelization" << endl;
+    std::cout << "... using OpenMP for parallelization" << std::endl;
 #else
-    cout << "... using c++ 11 threads for parallelization" << endl;
+    std::cout << "... using c++ 11 threads for parallelization" << std::endl;
 #endif
 //    check_op_overloading();
 
@@ -1329,8 +691,8 @@ main(int argc, char** argv) {
 //    camera.rotate(0,0,0);
 //    camera.move(Vec3f{-0.5,0,-0.25});
 
-    vector<shared_ptr<Primitive>> objects;
-    vector<Light> lights;
+    std::vector<std::shared_ptr<Primitive>> objects;
+    std::vector<Light> lights;
     create_scene(objects, lights);
     unsigned int finPix{0};
 
@@ -1350,14 +712,14 @@ main(int argc, char** argv) {
                         std::ref(background), std::ref(finPix)};
 #else
     unsigned int thread_count = 0;
-    thread renderThread{render, img_ptr, 0, 0, imHeight, imWidth, std::ref(camera), std::ref(objects), std::ref(lights),
+    std::thread renderThread{render, img_ptr, 0, 0, imHeight, imWidth, std::ref(camera), std::ref(objects), std::ref(lights),
                         std::ref(background), std::ref(finPix), std::ref(thread_count)};
 #endif
 
     preview(img, finPix, imWidth*imHeight, 200);
 
-    cout << "... finished rendering (" << timer.elapsed() << "s)" << endl;
-    cout << "... write image " << outFilename << endl;
+    std::cout << "... finished rendering (" << timer.elapsed() << "s)" << std::endl;
+    std::cout << "... write image " << outFilename << std::endl;
     cv::imwrite(outFilename, img);
 
     cv::imshow(winName, img);

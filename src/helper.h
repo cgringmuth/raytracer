@@ -7,14 +7,12 @@
 
 #include "common.h"
 
-namespace raytracer {
-    /** Converts angle in degree into rad.
-     *
-     * @param ang angle in degree
-     * @return angle in rad
-     */
-    Float deg2rad(Float ang);
-}
+/** Converts angle in degree into rad.
+ *
+ * @param ang angle in degree
+ * @return angle in rad
+ */
+Float deg2rad(Float ang);
 
 
 #endif //RAYTRACER_HELPER_H
