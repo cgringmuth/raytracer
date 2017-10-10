@@ -1,6 +1,7 @@
 #include <limits>
 #include "primitives.h"
 #include "container.h"
+#include "common.h"
 #include <fstream>
 
 //
@@ -26,9 +27,21 @@ Vec3f Plane::getNormal(const Vec3f &vec) const {
     return Vec3f{a, b, c};
 }
 
+/** Ray/Triangle intersection
+ * Check if ray intersects triangle and calculates distance and normal (which is interpolated from all triangle
+ * vertices)
+ *
+ * //TODO: optimization: Ray-Triangle Intersection Algorithm for Modern CPU Architectures. https://cadxfem.org/inf/Paper_46.pdf
+ *
+ * @param ray   The ray, which will be checked for intersection (r(t) = o + dt)
+ * @param dist  The is "t" of the ray.
+ * @param normal    The normal at the intersection point
+ * @return  True when ray intersects triangle. Only then normal and distance are meaningful.
+ */
 bool Triangle::intersect(const Ray &ray, Float &dist, Vec3f &normal) const {
-    normal = this->n1;
+    normal = n1;
 #if MT_TRIANGLE_INTERSECT==1
+    // "Fast, minimum storage ray/triangle intersection" by
     // src: http://www.cs.virginia.edu/%7Egfx/Courses/2003/ImageSynthesis/papers/Acceleration/Fast%20MinimumStorage%20RayTriangle%20Intersection.pdf
     // Any point on the triangle can be described by (in the uv-space)
     // P = v0 + u(v1-v0) + v(v2-v0)

@@ -19,6 +19,7 @@
 #include "camera.h"
 #include "color.h"
 #include "primitives.h"
+#include "common.h"
 
 /** Some good resources ray tracing
  * Lecture about ray tracing: http://www.cs.uu.nl/docs/vakken/magr/2015-2016/index.html
@@ -44,30 +45,6 @@
  * - todo: motion blur
  * - todo: global illumination: https://en.wikipedia.org/wiki/Global_illumination
  */
-
-
-/**
- * This enables Moeller-Trumbore algorithm for triangle intersection calculation. It is the fastest intersection
- * algorithm so far.
- */
-#ifndef MT_TRIANGLE_INTERSECT
-#define MT_TRIANGLE_INTERSECT   1
-#endif
-
-/**
- * Back-face culling basically leads to some performance improvements. But it only works properly with solid objects.
- * Hence, shadows might not be rendered correctly when CULLING is turned on and you want to render hulls instead
- * of solid objects. This is why it is turned of per default.
- * Refer to https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/single-vs-Float-sided-triangle-backface-culling
- * to reader more.
- */
-#ifndef CULLING
-#define CULLING                 0
-#endif
-
-#ifndef USE_OPENMP
-#define USE_OPENMP              0
-#endif
 
 //using namespace std;
 //using namespace raytracer;
