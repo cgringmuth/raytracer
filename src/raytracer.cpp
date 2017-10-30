@@ -20,6 +20,7 @@
 #include "color.h"
 #include "primitives.h"
 #include "common.h"
+#include "scene.h"
 
 /** Some good resources ray tracing
  * Lecture about ray tracing: http://www.cs.uu.nl/docs/vakken/magr/2015-2016/index.html

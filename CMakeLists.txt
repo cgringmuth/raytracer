@@ -23,7 +23,11 @@ add_executable(${PROJECT_NAME}
         src/primitives.cpp
         src/primitives.h
 
-        src/raytracer.cpp)
+        src/raytracer.cpp
+
+        src/scene.cpp
+        src/scene.h
+        )
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wall -Wextra -Wpedantic -Wshadow -Weffc++ -pedantic" )
 
