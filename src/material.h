@@ -19,7 +19,7 @@ struct Material {
     bool reflective;
     Float kr;  // reflectance coefficient
 
-    bool refractive;
+    bool refractive;    // TODO: is this switch really necessary?
     /** The refraction coefficient. This is the coefficient for this material
      * src: https://graphics.stanford.edu/courses/cs148-10-summer/docs/2006--degreve--reflection_refraction.pdf
      *
