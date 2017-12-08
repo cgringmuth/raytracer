@@ -1,0 +1,84 @@
+%YAML:1.0
+colors:
+  green: [0, 255, 0]
+  blue: [0, 0, 255]
+
+materials:
+    glass:
+        color: glass
+        ka: 0.1
+        kd: 0.1
+        ks: 0.2
+        kr: 0.8
+        kt: 0.8
+        specRefExp: 8
+        refractiveIdx: 1.5
+        reflective: true
+        refractive: true
+    glass2:
+        color: glass
+        ka: 0
+        kd: 0
+        ks: 0.8
+        kr: 0.2
+        kt: 0.8
+        specRefExp: 8
+        refractiveIdx: 1.5
+        reflective: true
+        refractive: true
+    porcelan:
+        color: white
+        ka: 0.2
+        kd: 0.5
+        ks: 0.7
+        kr: 0.3
+        kt: 0
+        specRefExp: 8
+        refractiveIdx: 0
+        reflective: true
+    mirror:
+        color: white
+        ka: 0
+        kd: 0
+        ks: 0
+        kr: 1
+        kt: 1
+        specRefExp: 8
+        refractiveIdx: 0
+        reflective: true
+    m1:
+        color: light_gray
+        ka: 0.1
+        kd: 0.7
+        ks: 0.4
+        kr: 0.3
+        kt: 0
+        specRefExp: 8
+        refractiveIdx: 0
+        reflective: true
+    m2:
+        color: white
+        ka: 0.1
+        kd: 0.7
+        ks: 0.4
+
+lights:
+  - pos: [0., 3., -7.5]
+    color: white
+  - pos: [0., 0., -1.]
+    color: white
+
+primitives:
+    - type: sphere
+      radius: 1.
+      center: [0., 0., -8.]
+      material: glass
+    - type: mesh
+      scale: 20.
+      translation: [-1.5, -3., -6.]
+      rotation: [0., 0., 0. ]
+      filename: /path/to/file.ply
+    - type: plane
+      normal: [0., 0. , 1.]
+      distance: 4.
+      material: green
