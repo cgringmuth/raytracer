@@ -75,16 +75,6 @@ Timer timer;
 constexpr int MAX_DEPTH{10};
 std::mutex RENDER_MUTEX;
 
-
-struct Light {
-    Vec3f pos;
-    Color color;
-
-    explicit Light(const Vec3f &pos) : Light{pos, color} {}
-    Light(const Vec3f &pos, const Color& color) : pos{pos}, color{color} {}
-
-};
-
 void check_op_overloading() {
     Vec3f v1, v2{1, 2, 3};
 
@@ -520,8 +510,8 @@ create_scene(std::vector<std::shared_ptr<Primitive>>& objects, std::vector<Light
     objects.push_back(std::make_shared<Sphere>(Vec3f{-2.5, 2, -5}, 1, Material{Color{1, 0, 1}, 0.2, 0.5, 0.7}));
 
 //    create_box(objects);
-//    const string mesh_root{"/home/chris/shared/github/chris/raytracer/data/3d_meshes/"};
-    const std::string mesh_root{"/home/chris/test/raytracer/data/3d_meshes/"};
+    const std::string mesh_root{"/home/chris/shared/github/chris/raytracer/data/3d_meshes/"};
+//    const std::string mesh_root{"/home/chris/test/raytracer/data/3d_meshes/"};
     std::string bunny_res4_path{mesh_root + "bunny/reconstruction/bun_zipper_res4.ply"};
     std::string bunny_res2_path{mesh_root + "bunny/reconstruction/bun_zipper_res2.ply"};
     std::string bunny_path{mesh_root + "bunny/reconstruction/bun_zipper.ply"};
@@ -637,11 +627,20 @@ void thread_render(ImageType* img_ptr, const unsigned int imWidth, const unsigne
 
 int
 main(int argc, char** argv) {
+
+    if (argc < 2) {
+        std::cerr << "You have to provide a scene file.";
+        exit(-1);
+    }
+
+    const std::string filename{argv[1]};
+    Scene scene{filename};
+
     std::string outFilename{"raytracer.png"};
-    if(argc > 1)
+    if (argc > 2)
     {
-        if (std::string(argv[1]) == "-o") {
-            outFilename = argv[2];
+        if (std::string(argv[2]) == "-o") {
+            outFilename = argv[3];
         }
     }
 

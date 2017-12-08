@@ -8,15 +8,28 @@
 #include "primitives.h"
 #include <vector>
 #include <memory>
+#include <string>
+
+
+struct Light {
+    Vec3f pos;
+    Color color;
+
+    explicit Light(const Vec3f &pos) : Light{pos, color} {}
+    Light(const Vec3f &pos, const Color& color) : pos{pos}, color{color} {}
+
+};
 
 class Scene {
 public:
-    Scene();
+    explicit Scene(const std::string& filename);
 
-    const std::vector<std::shared_ptr<Primitive>> &getObjects() const;
+    const std::vector<std::unique_ptr<Primitive>> &getObjects() const;
+    const std::vector<Light> &getLights() const;
 
 private:
-    std::vector<std::shared_ptr<Primitive>> objects;
+    std::vector<std::unique_ptr<Primitive>> objects;
+    std::vector<Light> lights;
 };
 
 #endif //RAYTRACER_SCENE_H

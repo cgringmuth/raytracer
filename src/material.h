@@ -36,14 +36,13 @@ struct Material {
     Float refractiveIdx;
     Float kt;  // transmission coefficient (the amount of light which it can pass through object)
 
+    explicit Material(Float ka=0.2, Float kd=0.7, Float ks=0.2, Float kr=0, Float kt=0, Float specRefExp=8, Float refractiveIdx=0,
+                      bool reflective=false, bool refractive=false)
+            : Material(Color{}, ka, kd, ks, kr, kt, specRefExp, refractiveIdx, reflective, refractive) {}
     explicit Material(const Color& color, Float ka=0.2, Float kd=0.7, Float ks=0.2, Float kr=0, Float kt=0, Float specRefExp=8,
                       Float refractiveIdx=0, bool reflective=false, bool refractive=false)
             : color(color), ka(ka), kd(kd), ks(ks), specRefExp(specRefExp), kr(kr), refractiveIdx(refractiveIdx)
             , reflective(reflective), refractive(refractive), kt{kt} {}
-    explicit Material(Float ka=0.2, Float kd=0.7, Float ks=0.2, Float kr=0, Float kt=0, Float specRefExp=8, Float refractiveIdx=0,
-                      bool reflective=false, bool refractive=false)
-            : color{}, ka(ka), kd(kd), ks(ks), specRefExp(specRefExp), kr(kr), refractiveIdx(refractiveIdx),
-              reflective(reflective), refractive(refractive), kt{kt} {}
 };
 
 #endif //RAYTRACER_MATERIAL_H
