@@ -83,3 +83,4 @@ primitives:
       normal: [0., 0. , 1.]
       distance: 4.
       material: green
+      material: green
