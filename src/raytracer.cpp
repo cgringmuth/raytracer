@@ -671,7 +671,8 @@ main(int argc, char** argv) {
     constexpr Float FOV = 60;
 
     Color background{0, 0.5, 0.5};
-    Camera camera{Vec3f{0,0,0}, Vec3f{0,1,0}, Vec3f{0,0,-1}, ASPECT_RATIO, FOV, imWidth, imHeight};
+    Camera camera{Vec3f{0,0,0}, Vec3f{0,1,0}, Vec3f{0,0,-1}, ASPECT_RATIO, FOV, imWidth, imHeight, {Point2D(0.5, 0.5)}};
+//    Camera camera{Vec3f{0,0,0}, Vec3f{0,1,0}, Vec3f{0,0,-1}, ASPECT_RATIO, FOV, imWidth, imHeight}; //  anti aliasing
     camera.rotate(0,0,M_PI/16);
 //    camera.rotate(0,0,0);
 //    camera.move(Vec3f{-0.5,0,-0.25});

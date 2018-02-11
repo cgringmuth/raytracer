@@ -17,6 +17,15 @@
 
 struct Mat3d;
 
+struct Point2D {
+    Float x, y;
+
+    Point2D() : Point2D(0, 0) {}
+
+    Point2D(Float x, Float y) : x{x}, y{y} {}
+};
+
+
 /** 3D vector in cartesian space.
  *
  */

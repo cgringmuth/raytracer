@@ -23,14 +23,6 @@ class Camera {
     unsigned int imWidth;
     unsigned int imHeight;
 
-    struct Point2D {
-        Float x, y;
-
-        Point2D() : Point2D(0, 0) {}
-
-        Point2D(Float x, Float y) : x{x}, y{y} {}
-    };
-
     std::vector<Point2D> antiAliasingPattern;
 
 public:
@@ -38,8 +30,9 @@ public:
             Camera{Vec3f{0, 0, 0}, Vec3f{0, 1, 0}, Vec3f{0, 0, -1}, aspectRatio, fov, imWidth, imHeight} {}
 
     Camera(const Vec3f &eye, const Vec3f &up, const Vec3f &at, Float aspectRatio, Float fov, unsigned int imWidth,
-           unsigned int imHeight) : eye(eye), up(up), at(at), aspectRatio(aspectRatio), fov(fov), imWidth(imWidth),
-                                    imHeight(imHeight), antiAliasingPattern(defaultAntiAliasingPattern()) {
+           unsigned int imHeight, std::vector<Point2D> antiAliasingPattern=defaultAntiAliasingPattern()) :
+            eye(eye), up(up), at(at), aspectRatio(aspectRatio), fov(fov), imWidth(imWidth),
+                                    imHeight(imHeight), antiAliasingPattern(antiAliasingPattern) {
         this->up.normalize();
         this->at.normalize();
         right = cross_product(at, up);
