@@ -34,7 +34,6 @@
 
 /** TODOs
  * - todo: Add material with different reflection models (refraction etc.)
- * - todo: (in progress) Loading scene from file (xml, YAML etc.) -> I would prefer yaml
  * - todo: Soft-shadows
  * - todo: Area lights
  * - todo: depth of field
@@ -42,10 +41,8 @@
  * - todo: optimization: early pruning of objects which cannot be hit (kD-tree (spatial partitioning), BVH (object partitioning) etc.)
  * - todo: optimization: bounding box with fast intersection calculation around object (bounding box: sphere, box etc.)
  * - todo: optimization: do calculation on GPU
- * - todo: (in progress) create scene to hold primitives, lights etc.
  * - todo: motion blur
  * - todo: global illumination: https://en.wikipedia.org/wiki/Global_illumination
- * - TODO: (in progress) add changelog: http://keepachangelog.com/en/0.3.0/
  */
 
 //using namespace std;
