@@ -34,7 +34,7 @@
 
 /** TODOs
  * - todo: Add material with different reflection models (refraction etc.)
- * - todo: Loading scene from file (xml, YAML etc.) -> I would prefer yaml
+ * - todo: (in progress) Loading scene from file (xml, YAML etc.) -> I would prefer yaml
  * - todo: Soft-shadows
  * - todo: Area lights
  * - todo: depth of field
@@ -42,9 +42,10 @@
  * - todo: optimization: early pruning of objects which cannot be hit (kD-tree (spatial partitioning), BVH (object partitioning) etc.)
  * - todo: optimization: bounding box with fast intersection calculation around object (bounding box: sphere, box etc.)
  * - todo: optimization: do calculation on GPU
- * - todo: create scene to hold primitives, lights etc.
+ * - todo: (in progress) create scene to hold primitives, lights etc.
  * - todo: motion blur
  * - todo: global illumination: https://en.wikipedia.org/wiki/Global_illumination
+ * - TODO: (in progress) add changelog: http://keepachangelog.com/en/0.3.0/
  */
 
 //using namespace std;
@@ -277,7 +278,7 @@ Float calcDist(const std::vector<std::shared_ptr<Primitive>>& objects,
 }
 
 Color
- trace(const std::vector<std::shared_ptr<Primitive>>& objects,
+ trace(const std::vector<std::unique_ptr<Primitive>>& objects,
       const std::vector<Light>& lights,
       const Color& background,
       const Ray& ray,
@@ -286,7 +287,7 @@ Color
     const Float bias{0.0001};   // bias origin of reflective/refractive/shadow ray a little into normal direction to adjust for precision problem
     Color color{background};
     Vec3f tmpnormal, hitNormal;
-    std::shared_ptr<Primitive> cur_obj{nullptr};
+    Primitive* cur_obj{nullptr};
 
     // get closest intersection
     for (const auto& object : objects) {
@@ -294,7 +295,7 @@ Color
             if (tmpdist < dist) {
                 dist = tmpdist;
                 hitNormal = tmpnormal;
-                cur_obj = object;
+                cur_obj = object.get();
             }
         }
     }
@@ -418,8 +419,7 @@ Color
 
 void
 render(ImageType* img, const unsigned int x_start, const unsigned int y_start, const unsigned int cH,
-       const unsigned int cW, const Camera& camera, const std::vector<std::shared_ptr<Primitive>>& objects,
-       const std::vector<Light>& lights, const Color& background, unsigned int& finPix,
+       const unsigned int cW, const Camera& camera, const Scene& scene, const Color& background, unsigned int& finPix,
        unsigned int& thread_count // only required when used in threads
 ) {
     const unsigned int W{camera.getImWidth()};
@@ -438,7 +438,7 @@ render(ImageType* img, const unsigned int x_start, const unsigned int y_start, c
 
             // trace primary/camera ray
             for (const auto& ray : rays)
-                px_color += trace(objects, lights, background, ray, 0) / numRays;
+                px_color += trace(scene.getObjects(), scene.getLights(), background, ray, 0) / numRays;
 //            Color px_color{calcDist(objects, ray)};
 
             // Using Opencv bgr
@@ -574,7 +574,7 @@ struct array_deleter
 };
 
 void thread_render(ImageType* img_ptr, const unsigned int imWidth, const unsigned int imHeight,
-                   const std::vector<std::shared_ptr<Primitive>>& objects, const std::vector<Light>& lights,
+                   const Scene& scene,
                    const Camera& camera, const Color& background, unsigned int& finPix)
 {
 
@@ -595,8 +595,8 @@ void thread_render(ImageType* img_ptr, const unsigned int imWidth, const unsigne
         {
             std::lock_guard<std::mutex> guard(RENDER_MUTEX);
             threads.emplace_back(render, img_ptr, x_start, y_start, tileHeight, tileWidth, std::ref(camera),
-                                     std::ref(objects),
-                                     lights, background,
+                                     std::ref(scene),
+                                     background,
                                      std::ref(finPix),
                                      std::ref(thread_count));
             ++thread_count;
@@ -679,9 +679,9 @@ main(int argc, char** argv) {
 //    camera.rotate(0,0,0);
 //    camera.move(Vec3f{-0.5,0,-0.25});
 
-    std::vector<std::shared_ptr<Primitive>> objects;
-    std::vector<Light> lights;
-    create_scene(objects, lights);
+//    std::vector<std::uniq<Primitive>> objects;
+//    std::vector<Light> lights;
+//    create_scene(objects, lights);
     unsigned int finPix{0};
 
     // split image into tiles (2x4)
@@ -696,11 +696,11 @@ main(int argc, char** argv) {
 
 #if USE_OPENMP == 0
     // start threads
-    thread renderThread{thread_render, img_ptr, imWidth, imHeight, std::ref(objects), std::ref(lights), std::ref(camera),
+    thread renderThread{thread_render, img_ptr, imWidth, imHeight, std::ref(scene), std::ref(camera),
                         std::ref(background), std::ref(finPix)};
 #else
     unsigned int thread_count = 0;
-    std::thread renderThread{render, img_ptr.get(), 0, 0, imHeight, imWidth, std::ref(camera), std::ref(objects), std::ref(lights),
+    std::thread renderThread{render, img_ptr.get(), 0, 0, imHeight, imWidth, std::ref(camera), std::ref(scene),
                         std::ref(background), std::ref(finPix), std::ref(thread_count)};
 #endif
 

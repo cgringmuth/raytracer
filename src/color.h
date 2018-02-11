@@ -6,6 +6,7 @@
 #define RAYTRACER_COLOR_H
 
 #include "common.h"
+#include "container.h"
 #include <cmath>
 #include <ostream>
 
@@ -17,10 +18,12 @@ struct Color {
 
     Float r, g, b;
 
-    Color() : Color{0} {};
-    explicit Color(const Float v) : Color{v,v,v} {};
-    Color(const Color& color) : Color{color.r, color.g, color.b} {};
-    Color(Float r, Float g, Float b) : r{r}, g{g}, b{b} {};
+    Color() : Color{0} {}
+    explicit Color(const Float v) : Color{v,v,v} {}
+    template <typename T>
+    explicit Color(Vec3<T> vec) : Color(vec[0], vec[1], vec[2]) {}
+    Color(const Color& color) : Color{color.r, color.g, color.b} {}
+    Color(Float r, Float g, Float b) : r{r}, g{g}, b{b} {}
 
     Color& operator/=(Float d) {
         const Float invD{1/d};
@@ -119,7 +122,7 @@ struct Color {
     }
 
     friend std::ostream &operator<<(std::ostream &os, const Color &color) {
-        os << "r: " << color.r << " g: " << color.g << " b: " << color.b;
+        os << "rgb: " << color.r << ", " << color.g << ", " << color.b;
         return os;
     }
 };

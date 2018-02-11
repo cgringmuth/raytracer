@@ -5,8 +5,10 @@
 #ifndef RAYTRACER_MATERIAL_H
 #define RAYTRACER_MATERIAL_H
 
+#include <ostream>
 #include "common.h"
 #include "color.h"
+
 
 struct Material {
     Color color;
@@ -43,6 +45,14 @@ struct Material {
                       Float refractiveIdx=0, bool reflective=false, bool refractive=false)
             : color(color), ka(ka), kd(kd), ks(ks), specRefExp(specRefExp), kr(kr), refractiveIdx(refractiveIdx)
             , reflective(reflective), refractive(refractive), kt{kt} {}
+
+    friend std::ostream &operator<<(std::ostream &os, const Material &material) {
+        os << "color: " << material.color << " ka: " << material.ka << " kd: " << material.kd << " ks: " << material.ks
+           << " specRefExp: " << material.specRefExp << " reflective: " << std::boolalpha << material.reflective << " kr: " << material.kr
+           << " refractive: " << std::boolalpha << material.refractive << " refractiveIdx: " << material.refractiveIdx << " kt: "
+           << material.kt;
+        return os;
+    }
 };
 
 #endif //RAYTRACER_MATERIAL_H

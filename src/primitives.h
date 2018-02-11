@@ -59,6 +59,13 @@ struct Plane : public Primitive {
         c = normal[2];
     }
 
+    Plane(Vec3f normal, Float dist, const Material& material) : d{dist}, Primitive{material} {
+        normal.normalize(); // make sure normal is normalized
+        a = normal[0];
+        b = normal[1];
+        c = normal[2];
+    }
+
     bool intersect(const Ray& ray, Float& dist, Vec3f& normal) const override;
 
     Vec3f getNormal(const Vec3f& vec) const override;
@@ -132,7 +139,7 @@ struct Model : Primitive {
 
     void updateBBVol();
 
-    static std::shared_ptr<Model> load_ply(const std::string& fname, const Material& material, bool calcNormal=false);
+    static Model* load_ply(const std::string& fname, const Material& material, bool calcNormal=false);
 
     bool intersect(const Ray& ray, Float& dist, Vec3f& normal) const override;
 

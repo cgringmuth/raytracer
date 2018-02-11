@@ -15,84 +15,7 @@
 
 #include "common.h"
 
-
-struct Mat3d {
-    Float v[9];
-    static const unsigned int width{3};
-    static const unsigned int height{3};
-
-    Mat3d(Float v0, Float v1, Float v2,
-          Float v3, Float v4, Float v5,
-          Float v6, Float v7, Float v8) {
-        v[0] = v0; v[1] = v1; v[2] = v2;
-        v[3] = v3; v[4] = v4; v[5] = v5;
-        v[6] = v6; v[7] = v7; v[8] = v8;
-    }
-
-    Mat3d(const Mat3d& mat) : Mat3d{mat.v} { }
-    Mat3d(const Float* v) {
-        memcpy(this->v, v, sizeof(Float)*length());
-    }
-
-    Float& at(unsigned int x, unsigned int y) { return v[y*width + x]; }
-    Float at(unsigned int x, unsigned int y) const { return v[y*width + x]; }
-
-    Float& operator[](size_t idx) {
-        return v[idx];
-    }
-
-    Float operator[](size_t idx) const {
-        return v[idx];
-    }
-
-    size_t length() const { return width*height; }
-
-    Mat3d& operator*=(const Mat3d& rhs) {
-        const Mat3d tmp{*this};
-        at(0,0) = tmp.at(0,0)*rhs.at(0,0) + tmp.at(1,0)*rhs.at(0,1) + tmp.at(2,0)*rhs.at(0,2);
-        at(1,0) = tmp.at(0,0)*rhs.at(1,0) + tmp.at(1,0)*rhs.at(1,1) + tmp.at(2,0)*rhs.at(1,2);
-        at(2,0) = tmp.at(0,0)*rhs.at(2,0) + tmp.at(1,0)*rhs.at(2,1) + tmp.at(2,0)*rhs.at(2,2);
-        at(0,1) = tmp.at(0,1)*rhs.at(0,0) + tmp.at(1,1)*rhs.at(0,1) + tmp.at(2,1)*rhs.at(0,2);
-        at(1,1) = tmp.at(0,1)*rhs.at(1,0) + tmp.at(1,1)*rhs.at(1,1) + tmp.at(2,1)*rhs.at(1,2);
-        at(2,1) = tmp.at(0,1)*rhs.at(2,0) + tmp.at(1,1)*rhs.at(2,1) + tmp.at(2,1)*rhs.at(2,2);
-        at(0,2) = tmp.at(0,2)*rhs.at(0,0) + tmp.at(1,2)*rhs.at(0,1) + tmp.at(2,2)*rhs.at(0,2);
-        at(1,2) = tmp.at(0,2)*rhs.at(1,0) + tmp.at(1,2)*rhs.at(1,1) + tmp.at(2,2)*rhs.at(1,2);
-        at(2,2) = tmp.at(0,2)*rhs.at(2,0) + tmp.at(1,2)*rhs.at(2,1) + tmp.at(2,2)*rhs.at(2,2);
-        return *this;
-    }
-
-    static Mat3d rotation(Float phiX, Float phiY, Float phiZ);
-
-    static Mat3d rotationX(Float phi) {
-        Float vmat[9];
-        const Float cosphi{cos(phi)};
-        const Float sinphi{sin(phi)};
-        vmat[0] = 1; vmat[1] = 0;      vmat[2] = 0;
-        vmat[3] = 0; vmat[4] = cosphi; vmat[5] = -sinphi;
-        vmat[6] = 0; vmat[7] = sinphi; vmat[8] = cosphi;
-        return Mat3d{vmat};
-    }
-
-    static Mat3d rotationY(Float phi) {
-        Float vmat[9];
-        const Float cosphi{cos(phi)};
-        const Float sinphi{sin(phi)};
-        vmat[0] = cosphi;  vmat[1] = 0; vmat[2] = sinphi;
-        vmat[3] = 0;       vmat[4] = 1; vmat[5] = 0;
-        vmat[6] = -sinphi; vmat[7] = 0; vmat[8] = cosphi;
-        return Mat3d{vmat};
-    }
-
-    static Mat3d rotationZ(Float phi) {
-        Float vmat[9];
-        const Float cosphi{cos(phi)};
-        const Float sinphi{sin(phi)};
-        vmat[0] = cosphi;  vmat[1] = -sinphi; vmat[2] = 0;
-        vmat[3] = sinphi;  vmat[4] = cosphi;  vmat[5] = 0;
-        vmat[6] = 0;       vmat[7] = 0;       vmat[8] = 1;
-        return Mat3d{vmat};
-    }
-};
+struct Mat3d;
 
 /** 3D vector in cartesian space.
  *
@@ -266,7 +189,7 @@ typedef Vec3<Float> Vec3f;
 
 
 template <typename T>
-std::ostream& operator<<(std::ostream& os, std::vector<T> vec) {
+std::ostream& operator<<(std::ostream& os, const std::vector<T>& vec) {
     for (int n=0; n<vec.size()-1; ++n)
         os << vec[n] << " ";
     os << vec[vec.size()-1];
@@ -289,6 +212,86 @@ struct Ray {
         return origin + (direction * dist);
     }
 };
+
+struct Mat3d {
+    Float v[9];
+    static const unsigned int width{3};
+    static const unsigned int height{3};
+
+    Mat3d(Float v0, Float v1, Float v2,
+          Float v3, Float v4, Float v5,
+          Float v6, Float v7, Float v8) {
+        v[0] = v0; v[1] = v1; v[2] = v2;
+        v[3] = v3; v[4] = v4; v[5] = v5;
+        v[6] = v6; v[7] = v7; v[8] = v8;
+    }
+
+    Mat3d(const Mat3d& mat) : Mat3d{mat.v} { }
+    Mat3d(const Float* v) {
+        memcpy(this->v, v, sizeof(Float)*length());
+    }
+
+    Float& at(unsigned int x, unsigned int y) { return v[y*width + x]; }
+    Float at(unsigned int x, unsigned int y) const { return v[y*width + x]; }
+
+    Float& operator[](size_t idx) {
+        return v[idx];
+    }
+
+    Float operator[](size_t idx) const {
+        return v[idx];
+    }
+
+    size_t length() const { return width*height; }
+
+    Mat3d& operator*=(const Mat3d& rhs) {
+        const Mat3d tmp{*this};
+        at(0,0) = tmp.at(0,0)*rhs.at(0,0) + tmp.at(1,0)*rhs.at(0,1) + tmp.at(2,0)*rhs.at(0,2);
+        at(1,0) = tmp.at(0,0)*rhs.at(1,0) + tmp.at(1,0)*rhs.at(1,1) + tmp.at(2,0)*rhs.at(1,2);
+        at(2,0) = tmp.at(0,0)*rhs.at(2,0) + tmp.at(1,0)*rhs.at(2,1) + tmp.at(2,0)*rhs.at(2,2);
+        at(0,1) = tmp.at(0,1)*rhs.at(0,0) + tmp.at(1,1)*rhs.at(0,1) + tmp.at(2,1)*rhs.at(0,2);
+        at(1,1) = tmp.at(0,1)*rhs.at(1,0) + tmp.at(1,1)*rhs.at(1,1) + tmp.at(2,1)*rhs.at(1,2);
+        at(2,1) = tmp.at(0,1)*rhs.at(2,0) + tmp.at(1,1)*rhs.at(2,1) + tmp.at(2,1)*rhs.at(2,2);
+        at(0,2) = tmp.at(0,2)*rhs.at(0,0) + tmp.at(1,2)*rhs.at(0,1) + tmp.at(2,2)*rhs.at(0,2);
+        at(1,2) = tmp.at(0,2)*rhs.at(1,0) + tmp.at(1,2)*rhs.at(1,1) + tmp.at(2,2)*rhs.at(1,2);
+        at(2,2) = tmp.at(0,2)*rhs.at(2,0) + tmp.at(1,2)*rhs.at(2,1) + tmp.at(2,2)*rhs.at(2,2);
+        return *this;
+    }
+
+    static Mat3d rotation(Float phiX, Float phiY, Float phiZ);
+    static Mat3d rotation(Vec3f rotVec) { return Mat3d::rotation(rotVec[0], rotVec[1], rotVec[2]); }
+
+    static Mat3d rotationX(Float phi) {
+        Float vmat[9];
+        const Float cosphi{cos(phi)};
+        const Float sinphi{sin(phi)};
+        vmat[0] = 1; vmat[1] = 0;      vmat[2] = 0;
+        vmat[3] = 0; vmat[4] = cosphi; vmat[5] = -sinphi;
+        vmat[6] = 0; vmat[7] = sinphi; vmat[8] = cosphi;
+        return Mat3d{vmat};
+    }
+
+    static Mat3d rotationY(Float phi) {
+        Float vmat[9];
+        const Float cosphi{cos(phi)};
+        const Float sinphi{sin(phi)};
+        vmat[0] = cosphi;  vmat[1] = 0; vmat[2] = sinphi;
+        vmat[3] = 0;       vmat[4] = 1; vmat[5] = 0;
+        vmat[6] = -sinphi; vmat[7] = 0; vmat[8] = cosphi;
+        return Mat3d{vmat};
+    }
+
+    static Mat3d rotationZ(Float phi) {
+        Float vmat[9];
+        const Float cosphi{cos(phi)};
+        const Float sinphi{sin(phi)};
+        vmat[0] = cosphi;  vmat[1] = -sinphi; vmat[2] = 0;
+        vmat[3] = sinphi;  vmat[4] = cosphi;  vmat[5] = 0;
+        vmat[6] = 0;       vmat[7] = 0;       vmat[8] = 1;
+        return Mat3d{vmat};
+    }
+};
+
 
 
 

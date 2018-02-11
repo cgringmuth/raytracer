@@ -237,7 +237,7 @@ void Model::updateBBVol() {
     bbvol = Sphere{center, radius, Color{0}};
 }
 
-std::shared_ptr<Model> Model::load_ply(const std::string &fname, const Material &material, bool calcNormal) {
+Model* Model::load_ply(const std::string &fname, const Material &material, bool calcNormal) {
     std::cout << "... loading model: " << fname << std::endl;
 
     std::ifstream ifs{fname};
@@ -330,7 +330,7 @@ std::shared_ptr<Model> Model::load_ply(const std::string &fname, const Material 
         }
     }
 
-    return std::make_shared<Model>(material, faces);
+    return new Model(material, faces);
 }
 
 bool Model::intersect(const Ray &ray, Float &dist, Vec3f &normal) const {
