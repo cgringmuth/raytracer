@@ -3,6 +3,7 @@
 #include "container.h"
 #include "common.h"
 #include <fstream>
+#include <assert.h>
 
 //
 // Created by chris on 19.08.17.
@@ -128,14 +129,14 @@ bool Triangle::intersect(const Ray &ray, Float &dist, Vec3f &normal) const {
 }
 
 Vec3f Triangle::getNormal(const Vec3f &vec) const {
-    return n0;  // todo: does not make sense anymore
+    return faceNormal;  // todo: depending on shading mode (flat shading etc.) it should return faceNormal or interpolate
 }
 
 Vec3f Triangle::calcNormal() {
     // todo: with one normal for each vertex this is not correct anymore
-    const Vec3f edge0{v1 - v0};
-    const Vec3f edge1{v2 - v0};
-    n0 = cross_product(edge0, edge1);
+    const Vec3f v0v1 = Vec3f::getVec(v0, v1);
+    const Vec3f v0v2 = Vec3f::getVec(v0, v2);
+    n0 = cross_product(v0v1, v0v2);
     n0.normalize();
     return n0;
 }
@@ -286,6 +287,28 @@ Model* Model::load_ply(const std::string &fname, const Material &material, bool 
         vertices.emplace_back(Vec3f{x, y, z});
     }
 
+    const bool center_model = true;
+    if (center_model) {
+        Vec3f center{0,0,0};
+        for (const auto& v : vertices) {
+            center += v;
+        }
+        center /= nvertices;
+        std::cout << "center: " << center << '\n';
+
+        for (auto& v : vertices) {
+            v -= center;
+        }
+
+        center = {0,0,0};
+        for (const auto& v : vertices) {
+            center += v;
+        }
+        center /= nvertices;
+        std::cout << "center: " << center << '\n';
+
+    }
+
     // read faces indices
     for (int i = 0; i < nfaces; ++i) {
         getline(ifs, line);
@@ -306,13 +329,21 @@ Model* Model::load_ply(const std::string &fname, const Material &material, bool 
             const Vec3f v0{vertices[fidx[0]]};
             const Vec3f v1{vertices[fidx[1]]};
             const Vec3f v2{vertices[fidx[2]]};
-            normals[fidx[0]] += cross_product(v1-v0, v2-v0);
-            normals[fidx[1]] += cross_product(v2-v1, v0-v1);
-            normals[fidx[2]] += cross_product(v0-v2, v1-v2);
+            const Vec3f v0v1 = Vec3f::getVec(v0, v1);
+            const Vec3f v0v2 = Vec3f::getVec(v0, v2);
+            const Vec3f faceNormal = Vec3f::getNormal(v0v1, v0v2);
+            normals[fidx[0]] += faceNormal;
+            normals[fidx[1]] += faceNormal;
+            normals[fidx[2]] += faceNormal;
         }
         // normalize all normals
+        unsigned int index = 0;
         for (auto& normal : normals) {
             normal.normalize();
+            if (raytracer::isnan(normal)) {
+                std::cerr << "Normal is nan:" << normal << " index: " << index << '\n';
+            }
+            ++index;
         }
     }
 

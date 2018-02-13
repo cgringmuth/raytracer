@@ -72,16 +72,20 @@ struct Plane : public Primitive {
 };
 
 struct Triangle : public Primitive {
-    Vec3f v0, v1, v2, n0, n1, n2;
+    Vec3f v0, v1, v2, n0, n1, n2, faceNormal;
 
     Triangle(const Vec3f& v0, const Vec3f& v1, const Vec3f& v2, const Color& color)
-            : v0{v0}, v1{v1}, v2{v2}, Primitive{color}, n0{calcNormal()}, n1{calcNormal()}, n2{calcNormal()} { }
+            : v0{v0}, v1{v1}, v2{v2}, Primitive{color}, n0{calcNormal()}, n1{calcNormal()}, n2{calcNormal()},
+              faceNormal{calcNormal()}
+    { }
     Triangle(const Vec3f& v0, const Vec3f& v1, const Vec3f& v2, const Material &material=Material{})
-            : v0{v0}, v1{v1}, v2{v2}, Primitive{material}, n0{calcNormal()}, n1{calcNormal()}, n2{calcNormal()} { }
+            : v0{v0}, v1{v1}, v2{v2}, Primitive{material}, n0{calcNormal()}, n1{calcNormal()}, n2{calcNormal()},
+              faceNormal{calcNormal()}
+    { }
     Triangle(const Vec3f& v0, const Vec3f& v1, const Vec3f& v2,
              const Vec3f& n0, const Vec3f& n1, const Vec3f& n2,
              const Material material=Material{})
-            : v0{v0}, v1{v1}, v2{v2}, Primitive{material}, n0{n0}, n1{n1}, n2{n2} { }
+            : v0{v0}, v1{v1}, v2{v2}, Primitive{material}, n0{n0}, n1{n1}, n2{n2}, faceNormal{calcNormal()}{ }
 
     bool intersect(const Ray& ray, Float& dist, Vec3f& normal) const override;
 
