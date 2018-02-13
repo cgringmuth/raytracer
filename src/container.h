@@ -37,6 +37,19 @@ struct Vec3 {
     Vec3(const Vec3<T>& v) : Vec3<T>{v.x, v.y, v.z} {}
     Vec3(Float x, Float y, Float z) : x{x}, y{y}, z{z} {}
 
+    static Vec3<T> getVec(const Vec3<T>& start, const Vec3<T>& end) {
+        Vec3<T> vec = end - start;
+        vec.normalize();
+        return vec;
+    }
+
+    static Vec3<T> getNormal(const Vec3<T>& a, const Vec3<T>& b) {
+        Vec3<T> vec = a.cross_product(b);
+        vec.normalize();
+        return vec;
+    }
+
+
     Vec3<T> operator-() const {
         Vec3<T> v;
         v.x = -x;
