@@ -1,0 +1,134 @@
+%YAML:1.0
+#This scene is for experiments
+colors:
+  green: [0, 1, 0]
+  blue: [0, 0, 1]
+  red: [1, 0, 0]
+  glass: [0.01, 0.1, 1]
+  white: 1
+  light_gray: 0.8
+  wall_color: [0.7529411764705882, 0.6078431372549019, 0.3686274509803922]
+  yellow: [1., 1., 0]
+
+materials:
+    glass:
+        color: glass
+        ka: 0.1
+        kd: 0.1
+        ks: 0.2
+        kr: 0.8
+        kt: 0.8
+        specRefExp: 8
+        refractiveIdx: 1.5
+        reflective: true
+        refractive: true
+    glass2:
+        color: glass
+        ka: 0
+        kd: 0
+        ks: 0.8
+        kr: 0.2
+        kt: 0.8
+        specRefExp: 8
+        refractiveIdx: 1.5
+        reflective: true
+        refractive: true
+    porcelan:
+        color: white
+        ka: 0.2
+        kd: 0.5
+        ks: 0.7
+        kr: 0.3
+        kt: 0
+        specRefExp: 8
+        refractiveIdx: 0
+        reflective: true
+    mirror:
+        color: white
+        ka: 0
+        kd: 0
+        ks: 0
+        kr: 1
+        kt: 1
+        specRefExp: 8
+        refractiveIdx: 0
+        reflective: true
+    m1:
+        color: light_gray
+        ka: 0.1
+        kd: 0.7
+        ks: 0
+        kr: 0.3
+        kt: 0
+        specRefExp: 8
+        refractiveIdx: 0
+        reflective: false
+    m2:
+        color: white
+        ka: 0.1
+        kd: 0.7
+        ks: 0.4
+    blue:
+        color: blue
+    red:
+        color: red
+    green:
+        color: green
+    wall_color:
+        color: wall_color
+    yellow:
+        color: yellow
+
+lights:
+  - pos: [0., 3., -7.5]
+    color: white
+    factor: 3.
+  - pos: [0., 0., -1.]
+    color: white
+    factor: 10.
+
+primitives:
+#    Spheres
+    - type: sphere
+      radius: 1.
+      center: [0., 0., -8.]
+      material: m1
+#    - type: sphere
+#      radius: 0.75
+#      center: [2., 0.25, -8.]
+#      material: m1
+#    - type: sphere
+#      radius: 1.
+#      center: [-2.5, 2., -5.]
+#      material: m1
+#    Mesh
+    - type: mesh
+      scale: 1
+      translation: [0, 0.1, -2.]
+#      translation: [-1.5, -3., -6.]
+      rotation: [-1.5, 0, 0]
+      filename: /home/chris/shared/github/chris/raytracer/data/3d_meshes/monkey.ply
+#      filename: /home/chris/shared/github/chris/raytracer/data/3d_meshes/bunny/reconstruction/bun_zipper_res4.ply
+#      filename: /home/chris/shared/github/chris/raytracer/data/3d_meshes/bunny/reconstruction/bun_zipper_res2.ply
+      material: glass
+#    Planes
+#    - type: plane
+#      normal: [0., 0. , 1.]
+#      distance: 12.
+#      material: wall_color
+#    - type: plane
+#      normal: [1., 0. , 0.]
+#      distance: 4.
+#      material: red
+#    - type: plane
+#      normal: [-1., 0. , 0.]
+#      distance: 4.
+#      material: green
+#    - type: plane
+#      normal: [0., 1. , 0.]
+#      distance: 4.
+#      material: blue
+#    - type: plane
+#      normal: [0., -1. , 0.]
+#      distance: 4.
+#      material: yellow
