@@ -5,6 +5,7 @@
 #include "scene.h"
 #include "color.h"
 #include "material.h"
+#include "model.h"
 #include <string>
 #include <map>
 
@@ -134,14 +135,17 @@ std::vector<Light> parseLight(const cv::FileStorage& fs, const std::map<std::str
 
 
 void parsePrimitives(const cv::FileStorage& fs, const std::map<std::string, Material> materials,
-                     std::vector<std::unique_ptr<Primitive>>& primitives) {
+                     std::vector<std::shared_ptr<Primitive>>& primitives,
+                     std::vector<std::shared_ptr<Model>>& models
+                    ) {
     const cv::FileNode primitivesNode = fs["primitives"];
-    std::vector<std::unique_ptr<Primitive>> primitivesTmp;
+    std::vector<std::shared_ptr<Primitive>> primitivesTmp;
+    std::vector<std::shared_ptr<Model>> modelsTmp;
 
     for (const auto& primitiveNode : primitivesNode) {
         const std::string type = std::string(primitiveNode["type"]);
         const Material material = materials.find(primitiveNode["material"])->second;
-        std::unique_ptr<Primitive> prim;
+        std::shared_ptr<Primitive> prim;
         if (type == "sphere") {
             const double radius = static_cast<double>(primitiveNode["radius"]);
             Vec3f center;
@@ -154,6 +158,7 @@ void parsePrimitives(const cv::FileStorage& fs, const std::map<std::string, Mate
             const auto scale = static_cast<double>(primitiveNode["scale"]);
             const std::string filename = std::string(primitiveNode["filename"]);
             Model* model = Model::load_ply(filename, material, true);
+            modelsTmp.emplace_back(model);
             if (model == nullptr) {
                 std::cerr << "Couldn't load model: " << filename << '\n';
                 std::runtime_error{"Couldn't load model."};
@@ -161,7 +166,10 @@ void parsePrimitives(const cv::FileStorage& fs, const std::map<std::string, Mate
             *model *= Mat3d::rotation(rotation);
             model->scale(scale);
             *model += translation;
-            prim.reset(model);
+            // copy pointer to all primitives from model to objects vector
+            primitivesTmp.insert(std::end(primitivesTmp), model->faces.begin(),
+                                model->faces.end());
+            continue;
         } else if (type == "plane") {
             Vec3f normal;
             read(primitiveNode["normal"], normal);
@@ -171,10 +179,11 @@ void parsePrimitives(const cv::FileStorage& fs, const std::map<std::string, Mate
             std::cerr << "type: " << type << " is not supported\n";
             throw std::runtime_error{"Type is not supported"};
         }
-        primitivesTmp.push_back(std::move(prim));
+        primitivesTmp.push_back(std::move(prim));   //FIXME: since Model is not a primitive anymore this should be refacetored. Currently for Model it will be continued
     }
 
     std::swap(primitivesTmp, primitives);
+    std::swap(modelsTmp, models);
 }
 
 
@@ -185,10 +194,10 @@ Scene::Scene(const std::string& filename) {
     const std::map<std::string, Color> colors = parseColors(fs);
     const std::map<std::string, Material> materials = parseMaterial(fs, colors);
     lights = parseLight(fs, colors);
-    parsePrimitives(fs, materials, objects);
+    parsePrimitives(fs, materials, objects, models);
 }
 
-const std::vector<std::unique_ptr<Primitive>> &Scene::getObjects() const {
+const std::vector<std::shared_ptr<Primitive>> &Scene::getObjects() const {
     return objects;
 }
 

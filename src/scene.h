@@ -6,6 +6,7 @@
 #define RAYTRACER_SCENE_H
 
 #include "primitives.h"
+#include "model.h"
 #include <vector>
 #include <memory>
 #include <string>
@@ -30,11 +31,12 @@ class Scene {
 public:
     explicit Scene(const std::string& filename);
 
-    const std::vector<std::unique_ptr<Primitive>> &getObjects() const;
+    const std::vector<std::shared_ptr<Primitive>> &getObjects() const;
     const std::vector<Light> &getLights() const;
 
 private:
-    std::vector<std::unique_ptr<Primitive>> objects;
+    std::vector<std::shared_ptr<Primitive>> objects;
+    std::vector<std::shared_ptr<Model>> models;
     std::vector<Light> lights;
 };
 

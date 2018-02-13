@@ -194,8 +194,8 @@ create_box(std::vector<std::shared_ptr<Primitive>>& objects) {
     triangles.emplace_back(Triangle{v4, v1, v7, mat});
 //    objects.push_back(make_shared<Triangle>( v7, v1, v2, color));
 //    objects.push_back(make_shared<Triangle>( v7, v1, v2, color));
-    std::shared_ptr<Model> model{std::make_shared<Model>(mat, triangles)};
-    objects.push_back(model);
+//    std::shared_ptr<Model> model{std::make_shared<Model>(mat, triangles)};
+//    objects.push_back(model);
 }
 
 
@@ -277,7 +277,7 @@ Float calcDist(const std::vector<std::shared_ptr<Primitive>>& objects,
 }
 
 Color
- trace(const std::vector<std::unique_ptr<Primitive>>& objects,
+ trace(const std::vector<std::shared_ptr<Primitive>>& objects,
       const std::vector<Light>& lights,
       const Color& background,
       const Ray& ray,
@@ -415,7 +415,6 @@ Color
 //             << "\tcolorReflect: " << colorReflect << '\n'
 //             << "\tcolorRefract: " << colorRefract << '\n';
 //    }
-
     return color;
 }
 
@@ -426,7 +425,6 @@ render(ImageType* img, const unsigned int x_start, const unsigned int y_start, c
 ) {
     const unsigned int W{camera.getImWidth()};
     const unsigned int H{camera.getImHeight()};
-
 #if USE_OPENMP == 1
     #pragma omp parallel for schedule(dynamic,10)       // OpenMP
 #endif
@@ -438,8 +436,9 @@ render(ImageType* img, const unsigned int x_start, const unsigned int y_start, c
             Color px_color{0};
 
             // trace primary/camera ray
-            for (const auto& ray : rays)
+            for (const auto& ray : rays) {
                 px_color += trace(scene.getObjects(), scene.getLights(), background, ray, 0) / numRays;
+            }
 //            Color px_color{calcDist(objects, ray)};
 
             // Using Opencv bgr
@@ -491,80 +490,6 @@ colorize_image_tile(cv::Mat img, int num, int x_start, int y_start, int pW, int 
 }
 
 
-void
-create_scene(std::vector<std::shared_ptr<Primitive>>& objects, std::vector<Light>& lights) {
-    lights.emplace_back(Light{Vec3f{0, 3, -7.5}, Color::white() * 3});
-//    lights.emplace_back(Light{Vec3f{0, 8, -9}, Color::white()*0.5});
-    lights.emplace_back(Light{Vec3f{0, 0, -1}, Color::white() * 10});
-//    lights.emplace_back(Light{Vec3f{5, -5, -2}, Color::white()*0.5});
-//    lights.emplace_back(Light{Vec{-30,-20,1}});
-    const Material glass(Color::glass(), 0.1, 0.1, 0.2, 0.8, 0.8, 8, 1.5, true, true);
-    const Material glass2(Color::glass(), 0, 0, 0.2, 0.8, 0.2, 8, 1.5, true, true);
-    const Material porcelain(Color::white(), 0.2, 0.5, 0.7, 0.3, 0, 8, 0, true);
-    const Material mirror(Color::white(), 0, 0, 0, 1, 1, 8, 0, true);
-    const Material m1(Color::light_gray(), 0.1, 0.7, 0.4, 0.3, 0, 8, 0, true);
-    const Material m2(Color::white(), 0.1, 0.7, 0.4);
-
-    objects.push_back(std::make_shared<Sphere>(Vec3f{0, 0, -8}, 1, Material(Color::red(), 0, 0, 0, 1, 1, 8, 0, true)));
-    objects.push_back(std::make_shared<Sphere>(Vec3f{2, 0.25, -8}, 0.75, Material{Color{1, 1, 0}, 0.2, 0.7, 0}));
-//    objects.push_back(make_shared<Sphere>(Vec3f{0, 1, -3}, 0.5, glass));
-    objects.push_back(std::make_shared<Sphere>(Vec3f{-2.5, 2, -5}, 1, Material{Color{1, 0, 1}, 0.2, 0.5, 0.7}));
-
-//    create_box(objects);
-    const std::string mesh_root{"/home/chris/shared/github/chris/raytracer/data/3d_meshes/"};
-//    const std::string mesh_root{"/home/chris/test/raytracer/data/3d_meshes/"};
-    std::string bunny_res4_path{mesh_root + "bunny/reconstruction/bun_zipper_res4.ply"};
-    std::string bunny_res2_path{mesh_root + "bunny/reconstruction/bun_zipper_res2.ply"};
-    std::string bunny_path{mesh_root + "bunny/reconstruction/bun_zipper.ply"};
-    std::shared_ptr<Model> bunny{Model::load_ply(bunny_path, porcelain, true)};     // glass bunny
-//    shared_ptr<Model> bunny{Model::load_ply(bunny_path, Material(Color::white(), 0.2, 0.5, 0.8, 0.2))};
-//    *bunny *= Mat3d::rotation(M_PI / 8, M_PI / 6, 0);
-//    *bunny *= Mat3d::rotationX(M_PI/6);
-//    *bunny *= Mat3d::rotationZ(M_PI/2);
-//    *bunny *= Mat3d::rotationY(M_PI/4);
-    bunny->scale(20);
-    *bunny += Vec3f{-1.5, -3, -6};
-    objects.emplace_back(bunny);
-
-
-//    string draon_res4_path{mesh_root+"dragon_recon/dragon_vrip_res4.ply"};
-//    string draon_path{mesh_root+"dragon_recon/dragon_vrip.ply"};
-//    shared_ptr<Model> dragon{Model::load_ply(draon_path)};
-//    dragon->scale(15);
-//    dragon->translate(Vec3f{2, -2, -7.5});
-//    objects.push_back(dragon);
-
-
-//    string buddha_res4_path{mesh_root+"happy_recon/happy_vrip_res4.ply"};
-//    string buddha_path{mesh_root+"happy_recon/happy_vrip.ply"};
-//    shared_ptr<Model> buddha{Model::load_ply(buddha_path)};
-//    buddha->scale(15);
-//    buddha->translate(Vec3f{2, -4, -7.5});
-//    buddha->material.ks = 0.9;
-//    objects.push_back(buddha);
-
-
-    // planes
-    const int box_len{4};
-    // back
-    const Color wall_color{192.0 / 255, 155.0 / 255, 94.0 / 255};
-    objects.push_back(std::make_shared<Plane>(0, 0, 1, box_len + 8, wall_color));
-    // left
-    objects.push_back(std::make_shared<Plane>(1, 0, 0, box_len, Color::red()));
-    // right
-//    objects.push_back(std::make_shared<Plane>(-1, 0, 0, box_len, Material{Color::green(), 0,0,0,1,0,8, 0, true}));   // mirror
-    objects.push_back(std::make_shared<Plane>(-1, 0, 0, box_len, Color::green()));
-    // bottom
-    objects.push_back(std::make_shared<Plane>(0, 1, 0, box_len, Color::blue()));
-    // top
-    objects.push_back(std::make_shared<Plane>(0, -1, 0, box_len, wall_color));
-    // behind camera
-    objects.push_back(std::make_shared<Plane>(0, 0, -1, box_len, Color(1, 1, 0)));
-
-//    s.radius = 10;
-}
-
-
 template< typename T >
 struct array_deleter
 {
@@ -580,8 +505,8 @@ void thread_render(ImageType* img_ptr, const unsigned int imWidth, const unsigne
 {
 
     // split image into tiles (2x4)
-    const unsigned int nXTiles{50};
-    const unsigned int nYTiles{50};
+    const unsigned int nXTiles{20};
+    const unsigned int nYTiles{20};
     const unsigned int tileWidth{imWidth/nXTiles};
     const unsigned int tileHeight{imHeight/nYTiles};
 
@@ -695,6 +620,7 @@ main(int argc, char** argv) {
     timer.reset();
     // starting thread to show progress
 //    thread thread_show{preview, std::ref(img), std::ref(finPix), imWidth*imHeight, 200};
+
 
 #if USE_OPENMP == 0
     // start threads

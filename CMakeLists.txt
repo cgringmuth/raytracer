@@ -27,7 +27,10 @@ add_executable(${PROJECT_NAME}
 
         src/scene.cpp
         src/scene.h
-        )
+
+        src/acceleration.cpp src/acceleration.h 
+
+	src/model.cpp src/model.h)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wall -Wextra -Wpedantic -Wshadow -Weffc++ -pedantic" )
 

@@ -128,45 +128,4 @@ struct Sphere : public Primitive {
     Vec3f getNormal(const Vec3f& P) const override;
 };
 
-struct Model : Primitive {
-    std::vector<Triangle> faces;
-
-    /** Bounding box volume used for optimization. */
-    Sphere bbvol;
-
-    Model(const Color& color, const std::vector<Triangle>& faces) : Primitive(color), faces(faces), bbvol() { updateBBVol(); }
-    Model(const Material& material, const std::vector<Triangle>& faces) : Primitive(material), faces(faces),
-                                                                     bbvol() { updateBBVol(); }
-    explicit Model(const Color& color) : Primitive(color), bbvol() {}
-    explicit Model(const Material& material) : Primitive(material), bbvol() {}
-    explicit Model() : bbvol() {}
-
-    void updateBBVol();
-
-    static Model* load_ply(const std::string& fname, const Material& material, bool calcNormal=false);
-
-    bool intersect(const Ray& ray, Float& dist, Vec3f& normal) const override;
-
-    Model& scale(Float s);
-
-    Model& translate(const Vec3f& t);
-
-    Vec3f getNormal(const Vec3f& vec) const override;
-
-    Model& operator*=(const Mat3d& mat);
-
-    Model& operator+=(const Vec3f& rhs);
-
-    friend Model operator+(Model lhs, const Vec3f& rhs) {
-        return lhs += rhs;
-    }
-
-    friend Model operator*(Model lhs, const Mat3d& rhs) {
-        return lhs *= rhs;
-    }
-
-
-};
-
-
 #endif //RAYTRACER_PRIMITIVES_H
