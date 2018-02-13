@@ -163,6 +163,7 @@ Vec3<T> operator-(Vec3<T> lhs, const Vec3<T>& rhs) {
     return lhs -= rhs;
 }
 
+
 template <typename T>
 Vec3<T> operator/(Vec3<T> lhs, const Float v) {
     return lhs /= v;
@@ -216,6 +217,23 @@ std::ostream& operator<<(std::ostream& os, const std::vector<T>& vec) {
         os << vec[n] << " ";
     os << vec[vec.size()-1];
     return os;
+}
+
+namespace raytracer {
+    template <typename T>
+    bool isnan(T t) {
+        for (const auto& elem : t) {
+            if (std::isnan(elem)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    template <typename T>
+    bool isnan(Vec3<T> vec) {
+        return std::isnan(vec.x) || std::isnan(vec.y) || std::isnan(vec.z);
+    }
 }
 
 
