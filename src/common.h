@@ -5,6 +5,8 @@
 #ifndef RAYTRACER_COMMON_H_H
 #define RAYTRACER_COMMON_H_H
 
+#include <iostream>
+
 /**
  * This enables Moeller-Trumbore algorithm for triangle intersection calculation. It is the fastest intersection
  * algorithm so far.
@@ -49,6 +51,25 @@ T clamp(T min, T max, T val) {
     val = val < min ? min : val;
     val = val > max ? max : val;
     return val;
+}
+
+#define TO_STREAM(stream, var) (stream) << #var": " << (var)
+#define TO_COUT(var) TO_STREAM(std::cout, var)
+
+#define OUTPUT(var) #var": " << (var)
+#define OUTPUTS(var) #var": " << (var) << ", "
+
+// FIXME: Not working properly
+template <typename T>
+void printVars(T t) {
+    std::cout << OUTPUT(t) << "\n";
+}
+
+
+template <typename T, typename... Rest>
+void printVars(T t, Rest... rest) {
+    std::cout << OUTPUT(t) << ", ";
+    printVars(rest...);
 }
 
 #endif //RAYTRACER_COMMON_H_H
