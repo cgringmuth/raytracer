@@ -456,7 +456,7 @@ render(ImageType* img, const unsigned int x_start, const unsigned int y_start, c
     processing = false;     // notify main thread that processing is finished
 #else
     {
-        lock_guard<mutex> guard(RENDER_MUTEX);
+        std::lock_guard<std::mutex> guard(RENDER_MUTEX);
         --thread_count;
     }
 #endif
@@ -580,8 +580,8 @@ void thread_render(ImageType* img_ptr, const unsigned int imWidth, const unsigne
 {
 
     // split image into tiles (2x4)
-    const unsigned int nXTiles{20};
-    const unsigned int nYTiles{20};
+    const unsigned int nXTiles{50};
+    const unsigned int nYTiles{50};
     const unsigned int tileWidth{imWidth/nXTiles};
     const unsigned int tileHeight{imHeight/nYTiles};
 
@@ -698,7 +698,7 @@ main(int argc, char** argv) {
 
 #if USE_OPENMP == 0
     // start threads
-    thread renderThread{thread_render, img_ptr, imWidth, imHeight, std::ref(scene), std::ref(camera),
+    std::thread renderThread{thread_render, img_ptr.get(), imWidth, imHeight, std::ref(scene), std::ref(camera),
                         std::ref(background), std::ref(finPix)};
 #else
     unsigned int thread_count = 0;
