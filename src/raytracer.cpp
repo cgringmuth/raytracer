@@ -43,6 +43,7 @@
  * - todo: optimization: do calculation on GPU
  * - todo: motion blur
  * - todo: global illumination: https://en.wikipedia.org/wiki/Global_illumination
+ * - todo: add command line support to define anit aliasing pattern (1, 4, 8...)
  */
 
 //using namespace std;
@@ -71,6 +72,7 @@ const std::string winName{"image"};
 typedef unsigned char ImageType;
 Timer timer;
 constexpr int MAX_DEPTH{10};
+//constexpr int MAX_DEPTH{2};
 std::mutex RENDER_MUTEX;
 
 void check_op_overloading() {
@@ -325,6 +327,9 @@ Color
             continue;
         }
 
+        if (raytracer::isnan(hitNormal)) {  // stop here
+            return Color(1, 0, 0);
+        }
 
         // diffuse shading
         const Float cosPhi{
@@ -336,7 +341,7 @@ Color
         const Float cosAlpha{
                 std::max<Float>(reflectRay.dotProduct(lv), 0.0)};    // todo: check why we have to clip negative values
         color += l.color * curMaterial.ks * (pow(cosAlpha, curMaterial.specRefExp) / (ldist * ldist));     // todo: add reflective color here
-//            color.clamp(0, 1);
+
     }
 
     ++depth;
@@ -400,16 +405,16 @@ Color
 
     color.clamp(0, 1);
 
-
-
-//        if (depth == MAX_DEPTH)
-//        {
-//            std::cout << "max depth reached: color: " << color << " factor r: " << rCoef << endl
-//                 << "\tcurMaterial.reflective: " << (curMaterial.reflective ? "true" : "false") << endl
-//                 << "\tcurMaterial.refractive: " << (curMaterial.refractive ? "true" : "false") << endl
-//                 << "\tcolorReflect: " << colorReflect << endl
-//                 << "\tcolorRefract: " << colorRefract << endl;
-//        }
+//    if (depth == MAX_DEPTH)
+//    {
+//        std::cout << "max depth reached: color: " << color << " factor r: " << rCoef << " depth: " << depth << '\n'
+//                << "\tcurMaterial.color: " << curMaterial.color << " curMaterial.ka: " << curMaterial.ka << '\n'
+//                << "\tcurMaterial.kr: " << curMaterial.kr << "\n"
+//             << "\tcurMaterial.reflective: " << (curMaterial.reflective ? "true" : "false") << '\n'
+//             << "\tcurMaterial.refractive: " << (curMaterial.refractive ? "true" : "false") << '\n'
+//             << "\tcolorReflect: " << colorReflect << '\n'
+//             << "\tcolorRefract: " << colorRefract << '\n';
+//    }
 
     return color;
 }
@@ -428,7 +433,6 @@ render(ImageType* img, const unsigned int x_start, const unsigned int y_start, c
     for (unsigned int y = y_start; y < cH+y_start; ++y) {
         ImageType* img_ptr{img + 3 * (y*W + x_start)};
         for (unsigned int x = x_start; x < cW+x_start; ++x) {
-//            const Ray ray{camera.castRay(x, y)};
             const std::vector<Ray> rays{camera.castRays(x,y)};
             const size_t numRays{rays.size()};
             Color px_color{0};
@@ -671,9 +675,9 @@ main(int argc, char** argv) {
     constexpr Float FOV = 60;
 
     Color background{0, 0.5, 0.5};
-    Camera camera{Vec3f{0,0,0}, Vec3f{0,1,0}, Vec3f{0,0,-1}, ASPECT_RATIO, FOV, imWidth, imHeight, {Point2D(0.5, 0.5)}};
-//    Camera camera{Vec3f{0,0,0}, Vec3f{0,1,0}, Vec3f{0,0,-1}, ASPECT_RATIO, FOV, imWidth, imHeight}; //  anti aliasing
-    camera.rotate(0,0,M_PI/16);
+//    Camera camera{Vec3f{0,0,0}, Vec3f{0,1,0}, Vec3f{0,0,-1}, ASPECT_RATIO, FOV, imWidth, imHeight, {Point2D(0.5, 0.5)}};
+    Camera camera{Vec3f{0,0,0}, Vec3f{0,1,0}, Vec3f{0,0,-1}, ASPECT_RATIO, FOV, imWidth, imHeight}; //  anti aliasing
+//    camera.rotate(0,0,M_PI/16);
 //    camera.rotate(0,0,0);
 //    camera.move(Vec3f{-0.5,0,-0.25});
 

@@ -158,8 +158,8 @@ void parsePrimitives(const cv::FileStorage& fs, const std::map<std::string, Mate
                 std::cerr << "Couldn't load model: " << filename << '\n';
                 std::runtime_error{"Couldn't load model."};
             }
-            model->scale(scale);
             *model *= Mat3d::rotation(rotation);
+            model->scale(scale);
             *model += translation;
             prim.reset(model);
         } else if (type == "plane") {
@@ -180,18 +180,12 @@ void parsePrimitives(const cv::FileStorage& fs, const std::map<std::string, Mate
 
 
 Scene::Scene(const std::string& filename) {
-    // TODO: loading from YAML file
     cv::FileStorage fs(filename, cv::FileStorage::READ);
-
 
     const std::map<std::string, Color> colors = parseColors(fs);
     const std::map<std::string, Material> materials = parseMaterial(fs, colors);
     lights = parseLight(fs, colors);
     parsePrimitives(fs, materials, objects);
-
-    std::cout << colors << '\n';
-    std::cout << materials << '\n';
-    std::cout << "[lights]: " << lights << '\n';
 }
 
 const std::vector<std::unique_ptr<Primitive>> &Scene::getObjects() const {
