@@ -116,7 +116,7 @@ void parseLight(const cv::FileStorage& fs, const std::map<std::string, Color>& c
     for (const auto & lightNode : lightsNode) {
         Vec3f pos;
         read(lightNode["pos"], pos);
-        double factor;
+        float factor;
         cv::read(lightNode["factor"], factor, 1.0);
         const Color color = colors.find(std::string(lightNode["color"]))->second * factor;     //FIXME: assumes color exists
         const Light light = Light{pos, color};
@@ -133,7 +133,7 @@ std::vector<Light> parseLight(const cv::FileStorage& fs, const std::map<std::str
 }
 
 
-void parsePrimitives(const cv::FileStorage& fs, const std::map<std::string, Material> materials,
+void parsePrimitives(const cv::FileStorage& fs, const std::map<std::string, Material>& materials,
                      std::vector<std::unique_ptr<Primitive>>& primitives) {
     const cv::FileNode primitivesNode = fs["primitives"];
     std::vector<std::unique_ptr<Primitive>> primitivesTmp;
@@ -143,7 +143,7 @@ void parsePrimitives(const cv::FileStorage& fs, const std::map<std::string, Mate
         const Material material = materials.find(primitiveNode["material"])->second;
         std::unique_ptr<Primitive> prim;
         if (type == "sphere") {
-            const double radius = static_cast<double>(primitiveNode["radius"]);
+            const float radius = static_cast<float>(primitiveNode["radius"]);
             Vec3f center;
             read(primitiveNode["center"], center);
             prim.reset(new Sphere{center, radius, material});
@@ -156,7 +156,7 @@ void parsePrimitives(const cv::FileStorage& fs, const std::map<std::string, Mate
             Model* model = Model::load_ply(filename, material, true);
             if (model == nullptr) {
                 std::cerr << "Couldn't load model: " << filename << '\n';
-                std::runtime_error{"Couldn't load model."};
+                throw std::runtime_error{"Couldn't load model."};
             }
             *model *= Mat3d::rotation(rotation);
             model->scale(scale);

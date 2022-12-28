@@ -43,7 +43,7 @@
  * - todo: optimization: do calculation on GPU
  * - todo: motion blur
  * - todo: global illumination: https://en.wikipedia.org/wiki/Global_illumination
- * - todo: add command line support to define anit aliasing pattern (1, 4, 8...)
+ * - todo: add command line support to define anti aliasing pattern (1, 4, 8...)
  */
 
 //using namespace std;
@@ -55,21 +55,21 @@
 class Timer
 {
 public:
-    Timer() : beg_(clock_::now()) {}
-    void reset() { beg_ = clock_::now(); }
+    Timer() : beg_(clock::now()) {}
+    void reset() { beg_ = clock::now(); }
     Float elapsed() const {
-        return std::chrono::duration_cast<second_>
-                (clock_::now() - beg_).count(); }
+        return std::chrono::duration_cast<second>
+                (clock::now() - beg_).count(); }
 
 private:
-    typedef std::chrono::high_resolution_clock clock_;
-    typedef std::chrono::duration<Float, std::ratio<1> > second_;
-    std::chrono::time_point<clock_> beg_;
+    using clock = std::chrono::high_resolution_clock;
+    using second = std::chrono::duration<Float, std::ratio<1> >;
+    std::chrono::time_point<clock> beg_;
 };
 
 bool processing{true};
 const std::string winName{"image"};
-typedef unsigned char ImageType;
+using ImageType = unsigned char;
 Timer timer;
 constexpr int MAX_DEPTH{10};
 //constexpr int MAX_DEPTH{2};
@@ -150,48 +150,48 @@ create_box(std::vector<std::shared_ptr<Primitive>>& objects) {
     // 0---3
     // | \ |
     // 1---2
-    triangles.emplace_back(Triangle{v0, v1, v2, mat});
-    triangles.emplace_back(Triangle{v0, v2, v3, mat});
+    triangles.emplace_back(v0, v1, v2, mat);
+    triangles.emplace_back(v0, v2, v3, mat);
 //    objects.push_back(make_shared<Triangle>( v0, v1, v2, color));
 //    objects.push_back(make_shared<Triangle>( v0, v2, v3, color));
     // right
     // 3---5
     // | \ |
     // 2---4
-    triangles.emplace_back(Triangle{v3, v2, v4, mat});
-    triangles.emplace_back(Triangle{v3, v4, v5, mat});
+    triangles.emplace_back(v3, v2, v4, mat);
+    triangles.emplace_back(v3, v4, v5, mat);
 //    objects.push_back(make_shared<Triangle>( v3, v2, v4, color));
 //    objects.push_back(make_shared<Triangle>( v3, v4, v5, color));
     // back
     // 5---6
     // | \ |
     // 4---7
-    triangles.emplace_back(Triangle{v5, v4, v7, mat});
-    triangles.emplace_back(Triangle{v5, v7, v6, mat});
+    triangles.emplace_back(v5, v4, v7, mat);
+    triangles.emplace_back(v5, v7, v6, mat);
 //    objects.push_back(make_shared<Triangle>( v5, v4, v7, color));
 //    objects.push_back(make_shared<Triangle>( v5, v7, v6, color));
     // left
     // 6---0
     // | \ |
     // 7---1
-    triangles.emplace_back(Triangle{v6, v1, v0, mat});
-    triangles.emplace_back(Triangle{v6, v7, v1, mat});
+    triangles.emplace_back(v6, v1, v0, mat);
+    triangles.emplace_back(v6, v7, v1, mat);
 //    objects.push_back(make_shared<Triangle>( v6, v7, v1, color));
 //    objects.push_back(make_shared<Triangle>( v6, v1, v0, color));
     // top
     // 6---5
     // | \ |
     // 0---3
-    triangles.emplace_back(Triangle{v6, v0, v3, mat});
-    triangles.emplace_back(Triangle{v6, v3, v5, mat});
+    triangles.emplace_back(v6, v0, v3, mat);
+    triangles.emplace_back(v6, v3, v5, mat);
 //    objects.push_back(make_shared<Triangle>( v6, v0, v3, color));
 //    objects.push_back(make_shared<Triangle>( v6, v3, v5, color));
     // bottom
     // 4---7
     // | \ |
     // 2---1
-    triangles.emplace_back(Triangle{v4, v2, v1, mat});
-    triangles.emplace_back(Triangle{v4, v1, v7, mat});
+    triangles.emplace_back(v4, v2, v1, mat);
+    triangles.emplace_back(v4, v1, v7, mat);
 //    objects.push_back(make_shared<Triangle>( v7, v1, v2, color));
 //    objects.push_back(make_shared<Triangle>( v7, v1, v2, color));
     std::shared_ptr<Model> model{std::make_shared<Model>(mat, triangles)};
@@ -223,7 +223,7 @@ preview(cv::Mat& img, unsigned int& finPix, unsigned int sumPix, int delay = 100
         lastElapsed = curElapsed;
         const std::string text{std::to_string((unsigned int)progress) + "%; t: " + std::to_string((unsigned int)curElapsed)
                           + " s; " + std::to_string((unsigned int) pixPerSec) + " pix/s"};
-        const int fontFace{CV_FONT_HERSHEY_SIMPLEX};
+        const int fontFace{cv::FONT_HERSHEY_SIMPLEX};
         const Float fontScale{0.8};
         const cv::Scalar color{0,255,0};
         const int thickness{1};
@@ -283,7 +283,7 @@ Color
       const Ray& ray,
       int depth) {
     Float dist{::std::numeric_limits<Float>::max()}, tmpdist;
-    const Float bias{0.0001};   // bias origin of reflective/refractive/shadow ray a little into normal direction to adjust for precision problem
+    const Float bias{0.0001};   // bias origin_ of reflective/refractive/shadow ray a little into normal direction_ to adjust for precision problem
     Color color{background};
     Vec3f tmpnormal, hitNormal;
     Primitive* cur_obj{nullptr};
@@ -328,7 +328,7 @@ Color
         }
 
         if (raytracer::isnan(hitNormal)) {  // stop here
-            return Color(1, 0, 0);
+            return {1, 0, 0};
         }
 
         // diffuse shading
@@ -355,7 +355,7 @@ Color
 
     // fresnel equation
     if (curMaterial.refractive && depth<=MAX_DEPTH) {
-        cosIncedent = ray.direction.dotProduct(hitNormal);     // is <0 if ray hits outside object hull (ray pointing towards object)
+        cosIncedent = ray.direction_.dotProduct(hitNormal);     // is <0 if ray hits outside object hull (ray pointing towards object)
         if (cosIncedent < 0.0) {
             // ray from air to object
             n1 = REFRACTIVE_INDEX_AIR;   // assuming air other medium
@@ -383,7 +383,7 @@ Color
     // reflective shading recursive tracing
     Color colorReflect{0};
     if (curMaterial.reflective && depth <= MAX_DEPTH) {
-        const Vec3f reflectDir{-hitNormal * 2 * dotProduct(hitNormal,ray.direction) + ray.direction};
+        const Vec3f reflectDir{-hitNormal * 2 * dotProduct(hitNormal,ray.direction_) + ray.direction_};
         colorReflect = curMaterial.kr * trace(objects, lights, background, Ray{hitPt + hitNormal * bias, reflectDir}, depth);
     }
     // refractive shading recursive tracing
@@ -391,7 +391,7 @@ Color
     if (curMaterial.refractive && depth <= MAX_DEPTH && sinSqrPhit <= 1) {
         // if sinSqrPhit > 1.0 we cannot find a transmission vector -> we have 'total internal reflection' (TRI) or critical angle
             // todo: handle tri and critical angle
-        const Vec3f refractDir{ray.direction * n + refractNormal * (n * cosIncedent - cosTransmission)};
+        const Vec3f refractDir{ray.direction_ * n + refractNormal * (n * cosIncedent - cosTransmission)};
         colorRefract = curMaterial.kt * trace(objects, lights, background, Ray{hitPt - refractNormal * bias, refractDir}, depth);
     }
 
@@ -438,9 +438,9 @@ render(ImageType* img, const unsigned int x_start, const unsigned int y_start, c
             Color px_color{0};
 
             // trace primary/camera ray
-            for (const auto& ray : rays)
+            for (const auto& ray : rays) {
                 px_color += trace(scene.getObjects(), scene.getLights(), background, ray, 0) / numRays;
-//            Color px_color{calcDist(objects, ray)};
+            }//            Color px_color{calcDist(objects, ray)};
 
             // Using Opencv bgr
             *(img_ptr++) = (ImageType) (px_color.b * 255);
@@ -463,10 +463,10 @@ render(ImageType* img, const unsigned int x_start, const unsigned int y_start, c
 }
 
 void
-colorize_image_tile(cv::Mat img, int num, int x_start, int y_start, int pW, int pH)
+colorize_image_tile(const cv::Mat& img, int num, int x_start, int y_start, int pW, int pH)
 {
     int baseline = 0;
-    const int fontFace = CV_FONT_HERSHEY_SIMPLEX;
+    const int fontFace = cv::FONT_HERSHEY_SIMPLEX;
     const Float fontScale = 1;
     const int thickness = 2;
     const std::string text{"thread "+std::to_string(num)};
@@ -666,7 +666,7 @@ main(int argc, char** argv) {
     std::shared_ptr<ImageType> img_ptr{new ImageType[imWidth*imHeight*3], array_deleter<ImageType>()};
     memset(img_ptr.get(), 0, sizeof(ImageType)*imWidth*imHeight*3);
     cv::Mat img{imHeight, imWidth, CV_8UC3, img_ptr.get()};
-    cv::namedWindow(winName, CV_WINDOW_AUTOSIZE);
+    cv::namedWindow(winName, cv::WINDOW_AUTOSIZE);
 
 //    constexpr unsigned int H = 250;
 //    constexpr unsigned int W = 350;
@@ -676,10 +676,17 @@ main(int argc, char** argv) {
 
     Color background{0, 0.5, 0.5};
 //    Camera camera{Vec3f{0,0,0}, Vec3f{0,1,0}, Vec3f{0,0,-1}, ASPECT_RATIO, FOV, imWidth, imHeight, {Point2D(0.5, 0.5)}};
-    Camera camera{Vec3f{0,0,0}, Vec3f{0,1,0}, Vec3f{0,0,-1}, ASPECT_RATIO, FOV, imWidth, imHeight}; //  anti aliasing
+    Camera camera{Vec3f{0,0,0},
+                  Vec3f{0,1,0},
+                  Vec3f{0,0,-1},
+                  ASPECT_RATIO,
+                  FOV,
+                  imWidth,
+                  imHeight,
+  Camera::noAntiAliasing()}; //  anti aliasing
 //    camera.rotate(0,0,M_PI/16);
 //    camera.rotate(0,0,0);
-//    camera.move(Vec3f{-0.5,0,-0.25});
+    camera.move(Vec3f{-0.5,0,-0.25});
 
 //    std::vector<std::uniq<Primitive>> objects;
 //    std::vector<Light> lights;
@@ -698,7 +705,7 @@ main(int argc, char** argv) {
 
 #if USE_OPENMP == 0
     // start threads
-    thread renderThread{thread_render, img_ptr, imWidth, imHeight, std::ref(scene), std::ref(camera),
+    std::thread renderThread{thread_render, img_ptr, imWidth, imHeight, std::ref(scene), std::ref(camera),
                         std::ref(background), std::ref(finPix)};
 #else
     unsigned int thread_count = 0;
@@ -714,7 +721,6 @@ main(int argc, char** argv) {
 
     cv::imshow(winName, img);
     cv::waitKey();
-    if (renderThread.joinable())
-        renderThread.join();
+    if (renderThread.joinable()) { renderThread.join(); }
 //    delete[] img_ptr;
 }

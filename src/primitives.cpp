@@ -3,7 +3,7 @@
 #include "container.h"
 #include "common.h"
 #include <fstream>
-#include <assert.h>
+#include <cassert>
 
 //
 // Created by chris on 19.08.17.
@@ -11,14 +11,14 @@
 bool Plane::intersect(const Ray &ray, Float &dist, Vec3f &normal) const {
     //src: https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/ray-triangle-intersection-geometric-solution
     normal = Vec3f{a, b, c};
-    const Float vd{normal.dotProduct(ray.direction)};
+    const Float vd{normal.dotProduct(ray.direction_)};
 
     if (abs(vd) < EPS)  // check if vd is 0 -> plane and ray parallel
         false;
     if (vd > 0)     // normal of plane is pointing away from camera (maybe handle differently)
         false;
 
-    const Float vo{normal.dotProduct(ray.origin) + d};
+    const Float vo{normal.dotProduct(ray.origin_) + d};
     dist = -vo / vd;
 
     return dist > EPS;
@@ -51,7 +51,7 @@ bool Triangle::intersect(const Ray &ray, Float &dist, Vec3f &normal) const {
     // Note: u and v can be used for texture mapping and normal interpolation
     const Vec3f v0v1{v1-v0};    // edge 1 from v0 to v1
     const Vec3f v0v2{v2-v0};    // edge 2 from v0 to v2
-    const Vec3f pVec{ray.direction.cross_product(v0v2)};
+    const Vec3f pVec{ray.direction_.cross_product(v0v2)};
     const Float det{pVec.dotProduct(v0v1)};
 
     // if determinant is negative, triangle is backfacing
@@ -60,22 +60,19 @@ bool Triangle::intersect(const Ray &ray, Float &dist, Vec3f &normal) const {
     if (det < EPS)
         return false;
 #else
-    if (abs(det) < EPS)
-        return false;
+    if (std::abs(det) < EPS) { return false; }
 #endif
     const Float invDet = 1 / det;
 
     // calc u
-    const Vec3f tVec{ray.origin-v0};
+    const Vec3f tVec{ray.origin_ - v0};
     const Float u{invDet * pVec.dotProduct(tVec)};
-    if (u < 0 || u > 1)
-        return false;
+    if (u < 0 || u > 1) { return false; }
 
     // calc v
     const Vec3f qVec{tVec.cross_product(v0v1)};
-    const Float v{invDet * qVec.dotProduct(ray.direction)};
-    if (v < 0 || u+v > 1)
-        return false;
+    const Float v{invDet * qVec.dotProduct(ray.direction_)};
+    if (v < 0 || u+v > 1) { return false; }
 
     // calc dist
     dist = invDet * qVec.dotProduct(v0v2);
@@ -88,7 +85,7 @@ bool Triangle::intersect(const Ray &ray, Float &dist, Vec3f &normal) const {
     Plane plane{normal,
                 -normal.dotProduct(v1),  // todo: check if this is correct (seems more as an workaround)
                 Color::white()};
-//        cout << ray.direction << endl;
+//        cout << ray.direction_ << endl;
 
     if (!plane.intersect(ray, dist, normal)) {
         return false;
@@ -175,8 +172,8 @@ Triangle &Triangle::operator*=(const Mat3d &mat) {
 // more details: https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rendering-simple-shapes/ray-sphere-intersection
 bool Sphere::intersect(const Ray &ray, Float &dist, Vec3f &normal) const {
     // (l * (o - c))^2 - || o - c ||^2 + r^2
-    const Vec3f temp{ray.origin - center};
-    const Float val1 = temp.dotProduct(ray.direction);
+    const Vec3f temp{ray.origin_ - center};
+    const Float val1 = temp.dotProduct(ray.direction_);
     const Float val2 = temp.length();
     const Float val3 = val1 * val1 - val2 * val2 + radius * radius;
 
@@ -242,9 +239,9 @@ Model* Model::load_ply(const std::string &fname, const Material &material, bool 
     std::cout << "... loading model: " << fname << std::endl;
 
     std::ifstream ifs{fname};
-    if (!ifs.is_open())
-        throw std::runtime_error{"Model "+fname+" could not be loaded. File does not exists."};
-
+    if (!ifs.is_open()) {
+        throw std::runtime_error{"Model " + fname + " could not be loaded. File does not exists."};
+    }
     std::string line, key;
     unsigned int val;
     std::getline(ifs, line);
@@ -273,7 +270,7 @@ Model* Model::load_ply(const std::string &fname, const Material &material, bool 
         std::getline(ifs, line);
     }
 
-    // assume coordinates x, y, z come first and ignore all other following values
+    // assume coordinates x_, y_, z come first and ignore all other following values
     std::vector<Vec3f> vertices, normals;
     std::vector<std::vector<unsigned int>> face_idx;
     std::vector<Triangle> faces;
@@ -284,7 +281,7 @@ Model* Model::load_ply(const std::string &fname, const Material &material, bool 
         std::stringstream ss{line};
         Float x, y, z;
         ss >> x >> y >> z;
-        vertices.emplace_back(Vec3f{x, y, z});
+        vertices.emplace_back(x, y, z);
     }
 
     const bool center_model = true;
@@ -354,10 +351,10 @@ Model* Model::load_ply(const std::string &fname, const Material &material, bool 
         const unsigned int iv2{fixd[2]};
 
         if (calcNormal) {
-            faces.emplace_back(Triangle{vertices[iv0], vertices[iv1], vertices[iv2],
-                                        normals[iv0], normals[iv1], normals[iv2], material});
+            faces.emplace_back(vertices[iv0], vertices[iv1], vertices[iv2],
+                                        normals[iv0], normals[iv1], normals[iv2], material);
         } else {
-            faces.emplace_back(Triangle{vertices[iv0], vertices[iv1], vertices[iv2], material});
+            faces.emplace_back(vertices[iv0], vertices[iv1], vertices[iv2], material);
         }
     }
 

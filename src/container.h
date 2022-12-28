@@ -2,12 +2,9 @@
 // Created by chris on 13.08.17.
 //
 
-#ifndef RAYTRACER_UTILS_H
-#define RAYTRACER_UTILS_H
-
 #pragma once
 
-#include <stdlib.h>
+#include <cstdlib>
 #include <cstring>
 #include <cmath>
 #include <iostream>
@@ -18,11 +15,18 @@
 struct Mat3d;
 
 struct Point2D {
-    Float x, y;
+    Float x_, y_;
 
     Point2D() : Point2D(0, 0) {}
 
-    Point2D(Float x, Float y) : x{x}, y{y} {}
+    Point2D(Float x, Float y) : x_{x}, y_{y} {}
+
+    Float &x() { return x_; }
+    const Float &x() const { return x_; }
+
+    Float &y() { return y_; }
+    const Float &y() const { return y_; }
+
 };
 
 
@@ -208,7 +212,7 @@ operator<<(std::ostream& os, const Vec3<T>& v) {
 }
 
 
-typedef Vec3<Float> Vec3f;
+using Vec3f = Vec3<Float>;
 
 
 template <typename T>
@@ -241,15 +245,31 @@ namespace raytracer {
  *
  */
 struct Ray {
-    // origin
-    Vec3f origin;
-    // direction
-    Vec3f direction;
+    // origin_
+    Vec3f origin_;
+    // direction_
+    Vec3f direction_;
 
-    Ray(Vec3f o, Vec3f d) : origin{o}, direction{d} {}
+    Ray(const Vec3f& o, const Vec3f& d) : origin_{o}, direction_{d} {}
 
     Vec3f getPoint(Float dist) const {
-        return origin + (direction * dist);
+        return origin_ + (direction_ * dist);
+    }
+
+    const Vec3f &origin() const {
+        return origin_;
+    }
+
+    Vec3f &origin() {
+        return origin_;
+    }
+
+    const Vec3f &direction() const {
+        return direction_;
+    }
+
+    Vec3f &direction() {
+        return direction_;
     }
 };
 
@@ -267,7 +287,7 @@ struct Mat3d {
     }
 
     Mat3d(const Mat3d& mat) : Mat3d{mat.v} { }
-    Mat3d(const Float* v) {
+    explicit Mat3d(const Float* v) {
         memcpy(this->v, v, sizeof(Float)*length());
     }
 
@@ -282,7 +302,7 @@ struct Mat3d {
         return v[idx];
     }
 
-    size_t length() const { return width*height; }
+    static size_t length() { return width*height; }
 
     Mat3d& operator*=(const Mat3d& rhs) {
         const Mat3d tmp{*this};
@@ -303,8 +323,8 @@ struct Mat3d {
 
     static Mat3d rotationX(Float phi) {
         Float vmat[9];
-        const Float cosphi{cos(phi)};
-        const Float sinphi{sin(phi)};
+        const Float cosphi{static_cast<Float>(cos(phi))};
+        const Float sinphi{static_cast<Float>(sin(phi))};
         vmat[0] = 1; vmat[1] = 0;      vmat[2] = 0;
         vmat[3] = 0; vmat[4] = cosphi; vmat[5] = -sinphi;
         vmat[6] = 0; vmat[7] = sinphi; vmat[8] = cosphi;
@@ -313,8 +333,8 @@ struct Mat3d {
 
     static Mat3d rotationY(Float phi) {
         Float vmat[9];
-        const Float cosphi{cos(phi)};
-        const Float sinphi{sin(phi)};
+        const Float cosphi{static_cast<Float>(cos(phi))};
+        const Float sinphi{static_cast<Float>(sin(phi))};
         vmat[0] = cosphi;  vmat[1] = 0; vmat[2] = sinphi;
         vmat[3] = 0;       vmat[4] = 1; vmat[5] = 0;
         vmat[6] = -sinphi; vmat[7] = 0; vmat[8] = cosphi;
@@ -323,16 +343,11 @@ struct Mat3d {
 
     static Mat3d rotationZ(Float phi) {
         Float vmat[9];
-        const Float cosphi{cos(phi)};
-        const Float sinphi{sin(phi)};
+        const Float cosphi{static_cast<Float>(cos(phi))};
+        const Float sinphi{static_cast<Float>(sin(phi))};
         vmat[0] = cosphi;  vmat[1] = -sinphi; vmat[2] = 0;
         vmat[3] = sinphi;  vmat[4] = cosphi;  vmat[5] = 0;
         vmat[6] = 0;       vmat[7] = 0;       vmat[8] = 1;
         return Mat3d{vmat};
     }
 };
-
-
-
-
-#endif //RAYTRACER_UTILS_H

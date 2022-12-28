@@ -85,7 +85,7 @@ primitives:
     - type: sphere
       radius: 1.
       center: [0., 0., -8.]
-      material: m1
+      material: mirror
     - type: sphere
       radius: 0.75
       center: [2., 0.25, -8.]
@@ -93,14 +93,14 @@ primitives:
     - type: sphere
       radius: 1.
       center: [-2.5, 2., -5.]
-      material: m1
+      material: glass
 #    Mesh
     - type: mesh
       scale: 20.
-      translation: [-1.5, -3., -6.]
+      translation: [-1.5, -1., -6.]
       rotation: [0., 0.5235987755982988, 0. ]
-      filename: /home/chris/shared/github/chris/raytracer/data/3d_meshes/bunny/reconstruction/bun_zipper_res4.ply
-#      filename: /home/chris/shared/github/chris/raytracer/data/3d_meshes/bunny/reconstruction/bun_zipper_res2.ply
+#      filename: /home/chris/shared/github/chris/raytracer/data/3d_meshes/bunny/reconstruction/bun_zipper_res4.ply
+      filename: /home/chris/shared/github/chris/raytracer/data/3d_meshes/bunny/reconstruction/bun_zipper_res2.ply
       material: porcelan
 #    Planes
     - type: plane
@@ -114,7 +114,7 @@ primitives:
     - type: plane
       normal: [-1., 0. , 0.]
       distance: 4.
-      material: porcelan
+      material: blue
     - type: plane
       normal: [0., 1. , 0.]
       distance: 4.
@@ -122,4 +122,4 @@ primitives:
     - type: plane
       normal: [0., -1. , 0.]
       distance: 4.
-      material: porcelan
+      material: red

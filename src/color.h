@@ -2,8 +2,7 @@
 // Created by chris on 19.08.17.
 //
 
-#ifndef RAYTRACER_COLOR_H
-#define RAYTRACER_COLOR_H
+#pragma once
 
 #include "common.h"
 #include "container.h"
@@ -66,23 +65,23 @@ struct Color {
     }
 
     static Color white() {
-        return Color(1, 1, 1);
+        return {1, 1, 1};
     }
 
     static Color black() {
-        return Color();
+        return {};
     }
 
     static Color red() {
-        return Color(1, 0, 0);
+        return {1, 0, 0};
     }
 
     static Color green() {
-        return Color(0, 1, 0);
+        return {0, 1, 0};
     }
 
     static Color blue() {
-        return Color(0, 0, 1);
+        return {0, 0, 1};
     }
 
     static Color gray() {
@@ -94,11 +93,11 @@ struct Color {
     }
 
     static Color yellow() {
-        return Color(1,1,0);
+        return {1,1,0};
     }
 
     static Color glass() {
-        return Color(0.788, 0.858, 0.862);
+        return {0.788, 0.858, 0.862};
     }
 
     friend Color operator/(Color lhs, const Float d) {
@@ -126,5 +125,3 @@ struct Color {
         return os;
     }
 };
-
-#endif //RAYTRACER_COLOR_H

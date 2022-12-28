@@ -43,8 +43,8 @@ struct Material {
             : Material(Color{}, ka, kd, ks, kr, kt, specRefExp, refractiveIdx, reflective, refractive) {}
     explicit Material(const Color& color, Float ka=0.2, Float kd=0.7, Float ks=0.2, Float kr=0, Float kt=0, Float specRefExp=8,
                       Float refractiveIdx=0, bool reflective=false, bool refractive=false)
-            : color(color), ka(ka), kd(kd), ks(ks), specRefExp(specRefExp), kr(kr), refractiveIdx(refractiveIdx)
-            , reflective(reflective), refractive(refractive), kt{kt} {}
+            : color(color), ka(ka), kd(kd), ks(ks), specRefExp(specRefExp), reflective(reflective), kr(kr)
+            , refractive(refractive), refractiveIdx(refractiveIdx), kt{kt} {}
 
     friend std::ostream &operator<<(std::ostream &os, const Material &material) {
         os << "color: " << material.color << " ka: " << material.ka << " kd: " << material.kd << " ks: " << material.ks
